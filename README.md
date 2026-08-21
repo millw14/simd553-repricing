@@ -39,9 +39,10 @@ meta.costUnits - (signature + write_lock + data_bytes) - computeUnitsConsumed
 ```
 
 must be a non-negative multiple of 8 for every transaction. It is, for
-**100.000% of transactions** (`node src/validate.mjs 5`). That pins the three
-static components exactly; the remaining two are read directly out of the
-transaction's ComputeBudget instructions.
+**100.000% of transactions** (`node src/validate.mjs 5`) — and the full epoch scrape
+reported **0 mismatches across 6,065,467 transactions**. That pins the three static
+components exactly; the remaining two are read directly out of the transaction's
+ComputeBudget instructions.
 
 As an independent cross-check, the model reproduces Cavey's published vote-transaction
 figure (~4,383 lamports at the terminal rate for a vote that declares a tight compute
@@ -76,27 +77,55 @@ count. Selecting one shows two bars on the same scale — what its average trans
 is **charged for** versus what it **actually uses** — broken into signature, write
 locks, instruction data, requested CU, and loaded-accounts size.
 
-The gap is the actionable part. pump.fun, for example, requests 102,130 CU and
-consumes 16,834 (83.5% unused), and takes the loaded-accounts default on 20% of its
-transactions. At the 1/10 gate that is a median **+103%**; requesting accurately would
-make it **−33%**.
+The gap is the actionable part. pump.fun, for example, leaves **87%** of the compute
+it requests unused and takes the loaded-accounts default on 29% of its transactions.
+At the 1/10 gate that is a median **+104%**; requesting accurately would make it
+**−31%**.
 
 Consumed CU comes from `meta.computeUnitsConsumed`; the actual loaded-accounts cost is
 recovered from the `meta.costUnits` residual, so both sides of the comparison are
 measured, not assumed.
 
+## Sampling
+
+Scraping all 432,000 slots of an epoch is not practical, so the ingester takes a
+stratified sample across the epoch's full slot range. Two details matter:
+
+**The stride must be odd.** The leader schedule gives each leader 4 consecutive
+slots. Any stride that is a multiple of 4 samples the same position in every
+leader's window — always the handoff slot, say — which aliases with leader rotation
+and biases the mix. `ingest.mjs` refuses an even stride.
+
+**Percentiles use a seeded reservoir sample.** Retaining "the first N" changes per
+accumulator would make every percentile describe only the opening hours of the
+epoch. Algorithm R with a fixed-seed PRNG keeps the retained sample uniform over the
+whole span and reproducible across runs. Counts, sums and histogram buckets are exact
+— only percentiles are sampled.
+
+Coverage is reported rather than assumed: slots where the leader produced no block
+are counted separately from slots the RPC failed to return, and the latter are
+surfaced as a warning, since RPC failures cluster under throttling and are not
+random. The daily projection uses the measured block-production rate, not an
+assumption that every slot yields a block.
+
 ## Run it
 
 ```bash
-node src/validate.mjs 5                                   # prove the model
-node src/ingest.mjs --blocks 260 --stride 40 --conc 3      # scrape -> data/txs.jsonl
-node src/aggregate.mjs --in data/txs.jsonl --out web/summary.json
-node src/build.mjs                                         # -> web/index.html
-node server.mjs                                            # http://localhost:4553
+node src/validate.mjs 5                       # prove the model against mainnet
+node src/ingest.mjs --from <startSlot> --to <endSlot> \
+     --blocks 4000 --stride 107 --conc 12 --out data/epoch.jsonl
+node src/aggregate.mjs --in data/epoch.jsonl --out web/summary.json
+node src/build.mjs                            # -> self-contained web/index.html
+node server.mjs                               # http://localhost:4553
 ```
 
-`RPC_URL` overrides the endpoint; the public one works but is slow. Larger
-`--blocks` and smaller `--stride` trade runtime for sample size.
+Put `RPC_URL=https://…` in `simd553/.env` (gitignored, never logged in full — only
+the host is printed) or pass it in the environment. The public endpoint is archival
+and works, at roughly a fifth of the throughput of a keyed provider.
+
+Omit `--from`/`--to` to sample backwards from the tip instead. Get an epoch's slot
+range from `getEpochInfo`: `epochStart = absoluteSlot - slotIndex`, and the previous
+(complete) epoch is the 432,000 slots below that.
 
 ## Layout
 
@@ -112,9 +141,15 @@ web/template.html   dashboard
 
 ## Caveats
 
-- One ~1.7-hour window of mainnet, not a full epoch. Traffic mix moves; re-run for
-  a different sample.
-- Daily projections scale measured txs/block by 216,000 slots/day.
+- The published run samples **epoch 1018** (slots 439,776,000–440,203,893, 47.5 h):
+  every 107th slot, 3,997 of 4,000 blocks returned, 6,065,467 transactions, 0 RPC
+  failures. It is a sample of the epoch, not every block in it.
+- Traffic mix still moves between epochs. Going from a 1.7 h window to the full epoch
+  left the medians unchanged but moved "pays more" at the 1/2 gate from 87.6% to
+  93.7%, and the non-vote median from +629% to +749% — small windows understate how
+  much non-vote traffic reprices.
+- Daily projections scale measured txs/block by 216,000 slots/day and the measured
+  block-production rate.
 - Today's fee comes from `meta.fee` (ground truth); priority is derived as
   `meta.fee - 5000 * num_signatures`.
 - The "requested accurately" scenario assumes 1.1× consumed CU and the true loaded

@@ -9,6 +9,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { redact } from "./env.mjs";
 import { getBlock, getSlot } from "./rpc.mjs";
 import { requestedCostUnits, staticCost, parseBudget, COMPUTE_BUDGET_ID, VOTE_ID } from "./costModel.mjs";
 import { splitTodayFee } from "./fees.mjs";
@@ -28,15 +29,34 @@ const OUT = arg("out", "data/txs.jsonl");
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 const out = fs.createWriteStream(OUT, { flags: "w" });
 
-const tip = await getSlot(RPC);
-const startSlot = tip - 100; // stay behind the tip so blocks are finalized
-const slots = Array.from({ length: BLOCKS }, (_, i) => startSlot - i * STRIDE);
+const FROM = arg("from", null); // explicit slot range (e.g. one full epoch)
+const TO = arg("to", null);
 
-console.log(`RPC    : ${RPC.replace(/api-key=.*/, "api-key=***")}`);
-console.log(`tip    : ${tip}`);
-console.log(`slots  : ${BLOCKS} blocks, stride ${STRIDE} (spans ~${((BLOCKS * STRIDE * 0.4) / 60).toFixed(1)} min of chain)`);
+let slots;
+if (FROM && TO) {
+  const from = Number(FROM), to = Number(TO);
+  // NOTE: the leader schedule gives each leader 4 consecutive slots. A stride that
+  // is a multiple of 4 would sample the same position in every leader's window and
+  // alias with leader rotation, so STRIDE must be coprime with 4.
+  if (STRIDE % 2 === 0) {
+    console.error(`stride ${STRIDE} is even -- it aliases with the 4-slot leader schedule. Use an odd stride.`);
+    process.exit(1);
+  }
+  slots = [];
+  for (let s = from; s <= to && slots.length < BLOCKS; s += STRIDE) slots.push(s);
+} else {
+  const tip = await getSlot(RPC);
+  const startSlot = tip - 100; // stay behind the tip so blocks are finalized
+  slots = Array.from({ length: BLOCKS }, (_, i) => startSlot - i * STRIDE);
+}
 
-let done = 0, txCount = 0, missing = 0, mismatch = 0;
+const spanSlots = slots.length ? Math.abs(slots[slots.length - 1] - slots[0]) : 0;
+console.log(`RPC    : ${redact(RPC)}`);
+console.log(`range  : ${Math.min(slots[0], slots[slots.length - 1])} -> ${Math.max(slots[0], slots[slots.length - 1])}`);
+console.log(`slots  : ${slots.length} samples, stride ${STRIDE}, spanning ${spanSlots.toLocaleString()} slots (~${((spanSlots * 0.4) / 3600).toFixed(1)} h of chain)`);
+
+let done = 0, txCount = 0, emptySlots = 0, mismatch = 0;
+const failed = [];
 let cursor = 0;
 
 function label(programs) {
@@ -54,10 +74,12 @@ async function worker() {
     try {
       block = await getBlock(RPC, slot);
     } catch (e) {
-      missing++;
+      // RPC gave up after retries. These are NOT random -- they cluster when the
+      // endpoint throttles -- so they are counted and reported, never swallowed.
+      failed.push(slot);
       continue;
     }
-    if (!block) { missing++; continue; }
+    if (!block) { emptySlots++; continue; } // leader produced no block for this slot
 
     const lines = [];
     for (const tx of block.transactions) {
@@ -107,5 +129,17 @@ await Promise.all(Array.from({ length: CONC }, worker));
 out.end();
 await new Promise((r) => out.on("finish", r));
 
-console.log(`\ndone. blocks=${done} missing=${missing} txs=${txCount} costUnitsMismatch=${mismatch}`);
+const coverage = (done / slots.length) * 100;
+console.log(`\ndone. blocks=${done}/${slots.length} (${coverage.toFixed(2)}% coverage)`);
+console.log(`emptySlots=${emptySlots} rpcFailed=${failed.length} txs=${txCount} costUnitsMismatch=${mismatch}`);
+if (failed.length) console.log(`WARNING: ${failed.length} slots dropped by RPC; sample is not uniform over the range.`);
+
+fs.writeFileSync(OUT.replace(/\.jsonl$/, "") + ".meta.json", JSON.stringify({
+  rpcHost: new URL(RPC).host,
+  slotsRequested: slots.length,
+  slotFrom: slots[0], slotTo: slots[slots.length - 1], stride: STRIDE,
+  blocks: done, emptySlots, rpcFailed: failed.length,
+  failedSlots: failed.slice(0, 500),
+  transactions: txCount, coveragePct: coverage,
+}, null, 1));
 console.log(`wrote ${OUT}`);

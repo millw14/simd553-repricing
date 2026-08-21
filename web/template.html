@@ -409,13 +409,16 @@ a { color: var(--ember); text-decoration-thickness: 1px; text-underline-offset: 
 
   // ---- provenance ----
   document.getElementById("prov").innerHTML = [
+    M.epoch != null ? ["Epoch", String(M.epoch)] : null,
     ["Sample", n0(M.transactions) + " txs"],
-    ["Blocks", n0(M.blocks)],
+    M.slotSpan
+      ? ["Blocks", n0(M.blocks) + " sampled across " + n0(M.slotSpan) + " slots"]
+      : ["Blocks", n0(M.blocks)],
     ["Votes", n1(M.votePct) + "%"],
     ["Sets CU limit", n1(M.setsCuLimitPct) + "%"],
     ["Sets loaded-size limit", n1(M.setsLoadedSizePct) + "%"],
     ["Generated", M.generatedAt.slice(0, 16).replace("T", " ") + " UTC"],
-  ].map(([k, v]) => "<span><b>" + k + "</b> " + v + "</span>").join("");
+  ].filter(Boolean).map(([k, v]) => "<span><b>" + k + "</b> " + v + "</span>").join("");
 
   // ---- selectors ----
   function seg(el, items, cur, onPick) {
@@ -657,9 +660,13 @@ a { color: var(--ember); text-decoration-thickness: 1px; text-underline-offset: 
   document.getElementById("assumptions").innerHTML =
     M.assumptions.map((a) => "<li>" + a + "</li>").join("");
   document.getElementById("foot").innerHTML =
-    "Cost model ported from agave and validated to 100% against " + n0(M.transactions) +
-    " mainnet transactions · sample spans " + n0(M.blocks) + " blocks · " +
-    "projections assume " + n0(M.slotsPerDay) + " slots/day at " + n0(M.txPerBlock) + " txs/block";
+    "Cost model ported from agave and validated against mainnet to a 100% match · " +
+    (M.epoch != null
+      ? "epoch " + M.epoch + ", slots " + n0(M.slotFrom) + "–" + n0(M.slotTo) +
+        ", every " + n0(M.stride) + "th slot sampled (" + n1(M.coveragePct) + "% returned)"
+      : n0(M.blocks) + " blocks sampled") +
+    " · projections use " + n0(M.slotsPerDay) + " slots/day × " +
+    n1(M.blockProductionRate * 100) + "% block production × " + n0(M.txPerBlock) + " txs/block";
 
   render();
 })();

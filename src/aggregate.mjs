@@ -16,6 +16,15 @@ const SLOTS_PER_DAY = 216_000; // 400ms slots
 const LAMPORTS_PER_SOL = 1e9;
 const CU_HEADROOM = 1.1; // "optimized" scenario: request 10% above what you actually burned
 
+// deterministic PRNG (mulberry32) so reservoir sampling is reproducible across runs
+let _seed = 0x9e3779b9;
+function rand() {
+  _seed |= 0; _seed = (_seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(_seed ^ (_seed >>> 15), 1 | _seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
 const pct = (n, d) => (d ? (n / d) * 100 : 0);
 const percentile = (sorted, p) => {
   if (!sorted.length) return 0;
@@ -58,7 +67,15 @@ function record(acc, todayFee, nf, todayBurn, newBurn, leaderToday, leaderNew) {
   if (d > 0) acc.more++; else if (d < 0) acc.less++; else acc.same++;
   const chg = todayFee > 0 ? (d / todayFee) * 100 : d > 0 ? Infinity : 0;
   acc.buckets[bucketOf(chg)]++;
-  if (acc.changes.length < acc.cap) acc.changes.push(Number.isFinite(chg) ? chg : 100000);
+  // Reservoir sampling (Algorithm R). A plain "keep the first N" cap would make every
+  // percentile describe only the earliest slots of the epoch; over a 432k-slot span
+  // that is a real bias. Seeded PRNG so re-runs reproduce.
+  const v = Number.isFinite(chg) ? chg : 100000;
+  if (acc.changes.length < acc.cap) acc.changes.push(v);
+  else {
+    const j = Math.floor(rand() * acc.n);
+    if (j < acc.cap) acc.changes[j] = v;
+  }
 }
 
 function finish(acc) {
@@ -187,7 +204,19 @@ for await (const line of rl) {
 
 const nBlocks = slotSet.size;
 const txPerBlock = nTx / nBlocks;
-const scale = (SLOTS_PER_DAY * txPerBlock) / nTx; // sample-total -> per-day
+
+// Ingest metadata lets the projection use the MEASURED block-production rate
+// instead of assuming every slot yields a block.
+let ing = null;
+try {
+  ing = JSON.parse(fs.readFileSync(IN.replace(/\.jsonl$/, "") + ".meta.json", "utf8"));
+} catch { /* older scrapes have no meta file */ }
+
+const sampledSlots = ing ? ing.blocks + ing.emptySlots : nBlocks;
+const productionRate = sampledSlots ? nBlocks / sampledSlots : 1;
+const blocksPerDay = SLOTS_PER_DAY * productionRate;
+const scale = (blocksPerDay * txPerBlock) / nTx; // sample-total -> per-day
+const SLOTS_PER_EPOCH = 432_000;
 
 const out = {
   meta: {
@@ -200,7 +229,18 @@ const out = {
     failed: nErr,
     txPerBlock,
     slotsPerDay: SLOTS_PER_DAY,
-    projectedTxPerDay: SLOTS_PER_DAY * txPerBlock,
+    projectedTxPerDay: blocksPerDay * txPerBlock,
+    // sampling provenance
+    epoch: ing ? Math.floor(ing.slotFrom / SLOTS_PER_EPOCH) : null,
+    slotFrom: ing?.slotFrom ?? null,
+    slotTo: ing?.slotTo ?? null,
+    slotSpan: ing ? ing.slotTo - ing.slotFrom : null,
+    stride: ing?.stride ?? null,
+    slotsSampled: sampledSlots,
+    emptySlots: ing?.emptySlots ?? null,
+    rpcFailed: ing?.rpcFailed ?? null,
+    coveragePct: ing?.coveragePct ?? null,
+    blockProductionRate: productionRate,
     setsCuLimitPct: pct(nSetsCu, nTx),
     setsLoadedSizePct: pct(nSetsLoaded, nTx),
     avgRequestedCostUnits: sumRequested / nTx,
@@ -214,7 +254,9 @@ const out = {
       "requested_cost_units recomputed from agave CostModel::calculate_cost (NOT meta.costUnits, which is the executed cost)",
       "today fee taken from meta.fee (ground truth); priority = meta.fee - 5000*num_signatures",
       "today burn = 50% of signature fee; priority fees 100% to leader (SIMD-0096)",
-      "daily projection = measured txs/block * 216000 slots/day",
+      "daily projection = measured txs/block * 216000 slots/day * measured block-production rate",
+      "blocks sampled on an ODD stride so the sample does not alias with the 4-slot leader schedule",
+      "percentiles come from a seeded reservoir sample, so they describe the whole span rather than its first slots",
       "vote program priced at the 3k builtin allocation: feature bls_pubkey_management_in_vote_account (AnAP9zPV4KL7czAPQbFhpDKV2tx7g4UGNbK9wvXwjaRo) is staged but NOT active on mainnet. The voteMigratedScenario block shows what happens when it activates.",
       "optimized scenario = request CU at 1.1x what the tx actually consumed and set loaded-accounts-data-size to the actual bytes loaded (both recovered from chain data)",
     ],

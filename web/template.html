@@ -1,0 +1,468 @@
+<title>SIMD-0553 Repricing Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+:root {
+  --bg: #F6F8FA;
+  --surface: #FFFFFF;
+  --surface-2: #EDF1F5;
+  --line: #DCE3EB;
+  --line-soft: #E9EEF3;
+  --text: #14202C;
+  --text-dim: #55677A;
+  --text-mute: #8496A8;
+  --ember: #C4531C;
+  --ember-soft: #F7E3D7;
+  --teal: #0E7C6B;
+  --teal-soft: #D8EDE9;
+  --shadow: 0 1px 2px rgba(20,32,44,.06), 0 8px 24px -12px rgba(20,32,44,.14);
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --display: "Archivo", var(--sans);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D141C;
+    --surface: #141E29;
+    --surface-2: #1B2836;
+    --line: #27384B;
+    --line-soft: #1E2B3A;
+    --text: #DCE6F0;
+    --text-dim: #93A5B8;
+    --text-mute: #6C7F93;
+    --ember: #F0854A;
+    --ember-soft: #3A2318;
+    --teal: #3ECBB0;
+    --teal-soft: #12332E;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D141C;
+  --surface: #141E29;
+  --surface-2: #1B2836;
+  --line: #27384B;
+  --line-soft: #1E2B3A;
+  --text: #DCE6F0;
+  --text-dim: #93A5B8;
+  --text-mute: #6C7F93;
+  --ember: #F0854A;
+  --ember-soft: #3A2318;
+  --teal: #3ECBB0;
+  --teal-soft: #12332E;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1120px; margin: 0 auto; padding: 40px 24px 96px; }
+
+/* ---------- header ---------- */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ember);
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+h1 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(30px, 5vw, 46px);
+  line-height: 1.04;
+  letter-spacing: -.02em;
+  margin: 0 0 16px;
+  text-wrap: balance;
+  max-width: 20ch;
+}
+.lede { font-size: 17px; color: var(--text-dim); max-width: 66ch; margin: 0 0 22px; }
+.lede strong { color: var(--text); font-weight: 600; }
+
+.provenance {
+  display: flex; flex-wrap: wrap; gap: 8px 20px;
+  font-family: var(--mono); font-size: 12px; color: var(--text-mute);
+  padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.provenance b { color: var(--text-dim); font-weight: 500; }
+
+/* ---------- gate selector ---------- */
+.controls {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--bg);
+  padding: 20px 0 16px;
+  margin: 28px 0 8px;
+  border-bottom: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 20px 28px; align-items: flex-end;
+}
+.ctl-group { display: flex; flex-direction: column; gap: 7px; }
+.ctl-label {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--text-mute); font-weight: 500;
+}
+.seg { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: var(--surface); }
+.seg button {
+  font-family: var(--mono); font-size: 13px; font-weight: 500;
+  padding: 8px 15px; border: 0; background: transparent; color: var(--text-dim);
+  cursor: pointer; border-right: 1px solid var(--line); transition: background .12s, color .12s;
+}
+.seg button:last-child { border-right: 0; }
+.seg button:hover { background: var(--surface-2); color: var(--text); }
+.seg button[aria-pressed="true"] { background: var(--ember); color: #fff; font-weight: 600; }
+.seg button:focus-visible { outline: 2px solid var(--ember); outline-offset: -2px; }
+
+/* ---------- tiles ---------- */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 14px; margin: 26px 0; }
+.tile {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 18px 16px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+}
+.tile::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--line); }
+.tile.up::before { background: var(--ember); }
+.tile.down::before { background: var(--teal); }
+.tile-label {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text-mute); margin-bottom: 10px; font-weight: 500;
+}
+.tile-value {
+  font-family: var(--display); font-weight: 700; font-size: 33px; line-height: 1;
+  letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+}
+.tile.up .tile-value { color: var(--ember); }
+.tile.down .tile-value { color: var(--teal); }
+.tile-sub { font-family: var(--mono); font-size: 11.5px; color: var(--text-mute); margin-top: 8px; }
+
+/* ---------- sections ---------- */
+section { margin: 44px 0 0; }
+h2 {
+  font-family: var(--display); font-weight: 700; font-size: 20px; letter-spacing: -.01em;
+  margin: 0 0 6px; display: flex; align-items: baseline; gap: 12px;
+}
+h2 .n {
+  font-family: var(--mono); font-size: 11px; color: var(--text-mute);
+  font-weight: 500; letter-spacing: .1em;
+}
+.sec-note { color: var(--text-dim); font-size: 14px; margin: 0 0 18px; max-width: 68ch; }
+
+.panel {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; padding: 20px; box-shadow: var(--shadow);
+}
+
+/* ---------- distribution ---------- */
+.dist { display: flex; flex-direction: column; gap: 3px; }
+.dist-row { display: grid; grid-template-columns: 108px 1fr 92px; align-items: center; gap: 12px; }
+.dist-key { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); text-align: right; }
+.dist-track { background: var(--surface-2); border-radius: 3px; height: 22px; position: relative; overflow: hidden; }
+.dist-bar { height: 100%; border-radius: 3px; transition: width .35s cubic-bezier(.4,0,.2,1); }
+.dist-bar.neg { background: var(--teal); }
+.dist-bar.pos { background: var(--ember); }
+.dist-bar.zero { background: var(--text-mute); }
+.dist-val {
+  font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+/* ---------- tables ---------- */
+.tbl-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-mute); font-weight: 500; text-align: right; padding: 0 0 10px; white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+th:first-child, td:first-child { text-align: left; }
+td {
+  padding: 10px 0; border-bottom: 1px solid var(--line-soft); text-align: right;
+  font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+td:first-child { font-family: var(--sans); }
+th + th, td + td { padding-left: 18px; }
+tr:last-child td { border-bottom: 0; }
+.pos { color: var(--ember); }
+.neg { color: var(--teal); }
+.pid { font-family: var(--mono); font-size: 11px; color: var(--text-mute); display: block; }
+.chip {
+  display: inline-block; font-family: var(--mono); font-size: 10.5px; padding: 2px 7px;
+  border-radius: 4px; font-weight: 500;
+}
+.chip.pos { background: var(--ember-soft); color: var(--ember); }
+.chip.neg { background: var(--teal-soft); color: var(--teal); }
+
+/* ---------- scenario cards ---------- */
+.scen { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.scen-card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px; box-shadow: var(--shadow);
+}
+.scen-card h3 { font-family: var(--display); font-size: 14.5px; font-weight: 700; margin: 0 0 4px; }
+.scen-card p { font-size: 12.5px; color: var(--text-dim); margin: 0 0 14px; line-height: 1.45; }
+.scen-stat { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line-soft); }
+.scen-stat span:first-child { font-size: 12px; color: var(--text-mute); }
+.scen-stat span:last-child { font-family: var(--mono); font-size: 13.5px; font-variant-numeric: tabular-nums; font-weight: 500; }
+
+/* ---------- callout ---------- */
+.callout {
+  border-left: 3px solid var(--ember); background: var(--surface);
+  border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 20px 0;
+  border-top: 1px solid var(--line); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.callout p { margin: 0; font-size: 14px; color: var(--text-dim); }
+.callout strong { color: var(--text); }
+
+/* ---------- method ---------- */
+.method { font-size: 13.5px; color: var(--text-dim); }
+.method li { margin-bottom: 8px; }
+.method code {
+  font-family: var(--mono); font-size: 12px; background: var(--surface-2);
+  padding: 1.5px 5px; border-radius: 4px; color: var(--text);
+}
+footer {
+  margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--line);
+  font-family: var(--mono); font-size: 11.5px; color: var(--text-mute);
+}
+a { color: var(--ember); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 620px) {
+  .dist-row { grid-template-columns: 84px 1fr 70px; gap: 8px; }
+  .controls { position: static; }
+}
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">SIMD-0553 &middot; Base Inclusion and Resource Fee</p>
+  <h1>How would SIMD-0553 reprice the traffic already on Solana?</h1>
+  <p class="lede">
+    Every transaction in this sample was re-priced under the proposed fee model by recomputing
+    <strong>requested_cost_units</strong> the way a validator does before execution &mdash; then compared against
+    the fee it actually paid on chain.
+  </p>
+  <div class="provenance" id="prov"></div>
+
+  <div class="controls">
+    <div class="ctl-group">
+      <span class="ctl-label">Fee gate</span>
+      <div class="seg" id="gateSel" role="group" aria-label="Resource fee rate"></div>
+    </div>
+    <div class="ctl-group">
+      <span class="ctl-label">Population</span>
+      <div class="seg" id="cohortSel" role="group" aria-label="Transaction population"></div>
+    </div>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="callout" id="headline"></div>
+
+  <section>
+    <h2><span class="n">01</span> Distribution of fee change</h2>
+    <p class="sec-note">Share of transactions landing in each band, relative to what they paid today.</p>
+    <div class="panel"><div class="dist" id="dist"></div></div>
+  </section>
+
+  <section>
+    <h2><span class="n">02</span> Who over-requests</h2>
+    <p class="sec-note">
+      The fee is charged on what a transaction <em>asks for</em>, not what it uses. These four cohorts split the
+      sample by whether it declares a compute-unit limit and a loaded-accounts-data-size limit.
+    </p>
+    <div class="panel tbl-scroll">
+      <table id="patternTbl"></table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">03</span> By requested cost units</h2>
+    <p class="sec-note">Fee change grouped by how much block space the transaction reserves.</p>
+    <div class="panel tbl-scroll"><table id="bucketTbl"></table></div>
+  </section>
+
+  <section>
+    <h2><span class="n">04</span> By program</h2>
+    <p class="sec-note">The 20 programs that account for the most transactions in the sample, by the last non-ComputeBudget instruction.</p>
+    <div class="panel tbl-scroll"><table id="progTbl"></table></div>
+  </section>
+
+  <section>
+    <h2><span class="n">05</span> Scenarios</h2>
+    <p class="sec-note">
+      The proposal assumes senders start requesting accurately. These compare the sample as-is against two
+      counterfactuals, at the selected gate.
+    </p>
+    <div class="scen" id="scen"></div>
+  </section>
+
+  <section>
+    <h2><span class="n">06</span> Method</h2>
+    <div class="panel method">
+      <ul id="assumptions"></ul>
+      <p style="margin-bottom:0">
+        The one trap worth naming: <code>meta.costUnits</code> in the RPC response is the
+        <em>executed</em> cost &mdash; agave fills it from <code>calculate_cost_for_executed_transaction</code>
+        using actual consumed CU and actual loaded bytes. SIMD-0553 charges on the
+        <em>requested</em> cost from <code>calculate_cost</code>. Building this off
+        <code>meta.costUnits</code> understates the fee on exactly the transactions the proposal targets.
+      </p>
+    </div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<script id="summary" type="application/json">__SUMMARY__</script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById("summary").textContent);
+  const M = D.meta;
+
+  const n0 = (x) => Math.round(x).toLocaleString("en-US");
+  const n1 = (x) => x.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const pc = (x) => (x >= 0 ? "+" : "") + n1(x) + "%";
+  const lam = (x) => n0(x) + " ł";
+  const cls = (x) => (x > 0 ? "pos" : x < 0 ? "neg" : "");
+
+  const GATE_KEYS = [["g1_10", "1/10"], ["g1_4", "1/4"], ["g1_2", "1/2"]];
+  const COHORTS = [["all", "All"], ["nonVote", "Non-vote"], ["vote", "Vote"]];
+  let gate = "g1_10", cohort = "all";
+
+  // ---- provenance ----
+  document.getElementById("prov").innerHTML = [
+    ["Sample", n0(M.transactions) + " txs"],
+    ["Blocks", n0(M.blocks)],
+    ["Votes", n1(M.votePct) + "%"],
+    ["Sets CU limit", n1(M.setsCuLimitPct) + "%"],
+    ["Sets loaded-size limit", n1(M.setsLoadedSizePct) + "%"],
+    ["Generated", M.generatedAt.slice(0, 16).replace("T", " ") + " UTC"],
+  ].map(([k, v]) => "<span><b>" + k + "</b> " + v + "</span>").join("");
+
+  // ---- selectors ----
+  function seg(el, items, cur, onPick) {
+    el.innerHTML = items.map(([k, l]) =>
+      '<button type="button" data-k="' + k + '" aria-pressed="' + (k === cur) + '">' + l + "</button>"
+    ).join("");
+    el.querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", () => { onPick(b.dataset.k); })
+    );
+  }
+
+  function render() {
+    const G = D.gates[gate];
+    const S = G[cohort];
+
+    seg(document.getElementById("gateSel"), GATE_KEYS, gate, (k) => { gate = k; render(); });
+    seg(document.getElementById("cohortSel"), COHORTS, cohort, (k) => { cohort = k; render(); });
+
+    // tiles
+    document.getElementById("tiles").innerHTML = [
+      { l: "Pay more", v: n1(S.pctMore) + "%", s: n0(S.more) + " txs", c: "up" },
+      { l: "Pay less", v: n1(S.pctLess) + "%", s: n0(S.less) + " txs", c: "down" },
+      { l: "Median change", v: pc(S.p.p50), s: "p25 " + pc(S.p.p25) + " · p75 " + pc(S.p.p75),
+        c: S.p.p50 > 0 ? "up" : "down" },
+      { l: "Avg fee / tx", v: lam(S.avgNewFee), s: "today " + lam(S.avgTodayFee), c: S.avgNewFee > S.avgTodayFee ? "up" : "down" },
+      { l: "Burn per day", v: n0(G.burn.newPerDaySol) + " SOL", s: "today " + n0(G.burn.todayPerDaySol) + " SOL · " + n1(G.burn.multiple) + "×", c: "up" },
+    ].map((t) =>
+      '<div class="tile ' + t.c + '"><div class="tile-label">' + t.l + '</div>' +
+      '<div class="tile-value">' + t.v + '</div><div class="tile-sub">' + t.s + "</div></div>"
+    ).join("");
+
+    // headline callout
+    const lbl = cohort === "all" ? "all transactions" : cohort === "vote" ? "vote transactions" : "non-vote transactions";
+    document.getElementById("headline").innerHTML =
+      "<p>At the <strong>" + G.label + "</strong> gate, <strong>" + n1(S.pctMore) + "%</strong> of " + lbl +
+      " in this sample would pay more than they did on chain, <strong>" + n1(S.pctLess) +
+      "%</strong> would pay less. Median change <strong>" + pc(S.p.p50) +
+      "</strong>. Daily burn moves from <strong>" + n0(G.burn.todayPerDaySol) + " SOL</strong> to <strong>" +
+      n0(G.burn.newPerDaySol) + " SOL</strong>.</p>";
+
+    // distribution
+    const bk = S.buckets;
+    const max = Math.max(...Object.values(bk));
+    document.getElementById("dist").innerHTML = Object.entries(bk).map(([k, v]) => {
+      const kind = k === "no change" ? "zero" : k.startsWith("<") || k.startsWith("-") ? "neg" : "pos";
+      const share = S.n ? (v / S.n) * 100 : 0;
+      return '<div class="dist-row"><div class="dist-key">' + k + "</div>" +
+        '<div class="dist-track"><div class="dist-bar ' + kind + '" style="width:' +
+        (max ? (v / max) * 100 : 0) + '%"></div></div>' +
+        '<div class="dist-val">' + n1(share) + "%</div></div>";
+    }).join("");
+
+    // pattern table
+    const PAT = [
+      ["neither", "Sets neither limit"],
+      ["cuOnly", "CU limit only"],
+      ["loadedOnly", "Loaded-size limit only"],
+      ["both", "Sets both limits"],
+    ];
+    document.getElementById("patternTbl").innerHTML =
+      "<thead><tr><th>Cohort</th><th>Txs</th><th>Share</th><th>Pay more</th><th>Median change</th><th>Avg fee today</th><th>Avg fee new</th></tr></thead><tbody>" +
+      PAT.map(([k, l]) => {
+        const p = G.byPattern[k];
+        if (!p || !p.n) return "";
+        return "<tr><td>" + l + "</td><td>" + n0(p.n) + "</td><td>" +
+          n1((p.n / M.transactions) * 100) + "%</td><td>" + n1(p.pctMore) + "%</td>" +
+          '<td class="' + cls(p.p.p50) + '">' + pc(p.p.p50) + "</td><td>" + lam(p.avgTodayFee) +
+          "</td><td>" + lam(p.avgNewFee) + "</td></tr>";
+      }).join("") + "</tbody>";
+
+    // cost bucket table
+    document.getElementById("bucketTbl").innerHTML =
+      "<thead><tr><th>Requested cost units</th><th>Txs</th><th>Share</th><th>Pay more</th><th>Median change</th><th>Avg fee today</th><th>Avg fee new</th></tr></thead><tbody>" +
+      G.byCostBucket.map(([k, b]) =>
+        "<tr><td>" + k + "</td><td>" + n0(b.n) + "</td><td>" +
+        n1((b.n / M.transactions) * 100) + "%</td><td>" + n1(b.pctMore) + "%</td>" +
+        '<td class="' + cls(b.p.p50) + '">' + pc(b.p.p50) + "</td><td>" + lam(b.avgTodayFee) +
+        "</td><td>" + lam(b.avgNewFee) + "</td></tr>"
+      ).join("") + "</tbody>";
+
+    // program table
+    document.getElementById("progTbl").innerHTML =
+      "<thead><tr><th>Program</th><th>Txs</th><th>Share</th><th>Pay more</th><th>Median change</th><th>Avg fee today</th><th>Avg fee new</th></tr></thead><tbody>" +
+      D.programs[gate].slice(0, 20).map((p) =>
+        "<tr><td>" + (p.label ? p.label : "<span class=pid>" + p.id.slice(0, 22) + "…</span>") +
+        (p.label ? '<span class="pid">' + p.id.slice(0, 22) + "…</span>" : "") + "</td>" +
+        "<td>" + n0(p.n) + "</td><td>" + n1(p.share) + "%</td>" +
+        "<td>" + n1(p.pctMore) + "%</td>" +
+        '<td><span class="chip ' + (p.medianChangePct > 0 ? "pos" : "neg") + '">' + pc(p.medianChangePct) + "</span></td>" +
+        "<td>" + lam(p.avgTodayFee) + "</td><td>" + lam(p.avgNewFee) + "</td></tr>"
+      ).join("") + "</tbody>";
+
+    // scenarios
+    const A = G.all, O = G.optimized, V = G.voteMigratedScenario;
+    document.getElementById("scen").innerHTML = [
+      { h: "As-is today", p: "Traffic re-priced exactly as it was submitted, with no behaviour change.",
+        rows: [["Pay more", n1(A.pctMore) + "%"], ["Median change", pc(A.p.p50)], ["Burn / day", n0(G.burn.newPerDaySol) + " SOL"]] },
+      { h: "If senders requested accurately",
+        p: "Every transaction asks for " + M.cuHeadroom + "× the CU it actually consumed and declares its real loaded-accounts size.",
+        rows: [["Pay more", n1(O.pctMore) + "%"], ["Median change", pc(O.p.p50)], ["Burn / day", n0(G.burn.optimizedPerDaySol) + " SOL"]] },
+      { h: "If the vote feature activates",
+        p: "bls_pubkey_management_in_vote_account moves vote instructions from the 3k builtin allocation to the 200k default.",
+        rows: [["Pay more", n1(V.pctMore) + "%"], ["Median change", pc(V.p.p50)], ["Burn / day", n0(G.burn.voteMigratedPerDaySol) + " SOL"]] },
+    ].map((s) =>
+      '<div class="scen-card"><h3>' + s.h + "</h3><p>" + s.p + "</p>" +
+      s.rows.map((r) => '<div class="scen-stat"><span>' + r[0] + "</span><span>" + r[1] + "</span></div>").join("") +
+      "</div>"
+    ).join("");
+  }
+
+  document.getElementById("assumptions").innerHTML =
+    M.assumptions.map((a) => "<li>" + a + "</li>").join("");
+  document.getElementById("foot").innerHTML =
+    "Cost model ported from agave and validated to 100% against " + n0(M.transactions) +
+    " mainnet transactions · sample spans " + n0(M.blocks) + " blocks · " +
+    "projections assume " + n0(M.slotsPerDay) + " slots/day at " + n0(M.txPerBlock) + " txs/block";
+
+  render();
+})();
+</script>

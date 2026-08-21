@@ -1,0 +1,3772 @@
+<title>SIMD-0553 Repricing Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+:root {
+  --bg: #F6F8FA;
+  --surface: #FFFFFF;
+  --surface-2: #EDF1F5;
+  --line: #DCE3EB;
+  --line-soft: #E9EEF3;
+  --text: #14202C;
+  --text-dim: #55677A;
+  --text-mute: #8496A8;
+  --ember: #C4531C;
+  --ember-soft: #F7E3D7;
+  --teal: #0E7C6B;
+  --teal-soft: #D8EDE9;
+  --shadow: 0 1px 2px rgba(20,32,44,.06), 0 8px 24px -12px rgba(20,32,44,.14);
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --display: "Archivo", var(--sans);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D141C;
+    --surface: #141E29;
+    --surface-2: #1B2836;
+    --line: #27384B;
+    --line-soft: #1E2B3A;
+    --text: #DCE6F0;
+    --text-dim: #93A5B8;
+    --text-mute: #6C7F93;
+    --ember: #F0854A;
+    --ember-soft: #3A2318;
+    --teal: #3ECBB0;
+    --teal-soft: #12332E;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D141C;
+  --surface: #141E29;
+  --surface-2: #1B2836;
+  --line: #27384B;
+  --line-soft: #1E2B3A;
+  --text: #DCE6F0;
+  --text-dim: #93A5B8;
+  --text-mute: #6C7F93;
+  --ember: #F0854A;
+  --ember-soft: #3A2318;
+  --teal: #3ECBB0;
+  --teal-soft: #12332E;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1120px; margin: 0 auto; padding: 40px 24px 96px; }
+
+/* ---------- header ---------- */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ember);
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+h1 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(30px, 5vw, 46px);
+  line-height: 1.04;
+  letter-spacing: -.02em;
+  margin: 0 0 16px;
+  text-wrap: balance;
+  max-width: 20ch;
+}
+.lede { font-size: 17px; color: var(--text-dim); max-width: 66ch; margin: 0 0 22px; }
+.lede strong { color: var(--text); font-weight: 600; }
+
+.provenance {
+  display: flex; flex-wrap: wrap; gap: 8px 20px;
+  font-family: var(--mono); font-size: 12px; color: var(--text-mute);
+  padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.provenance b { color: var(--text-dim); font-weight: 500; }
+
+/* ---------- gate selector ---------- */
+.controls {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--bg);
+  padding: 20px 0 16px;
+  margin: 28px 0 8px;
+  border-bottom: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 20px 28px; align-items: flex-end;
+}
+.ctl-group { display: flex; flex-direction: column; gap: 7px; }
+.ctl-label {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--text-mute); font-weight: 500;
+}
+.seg { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: var(--surface); }
+.seg button {
+  font-family: var(--mono); font-size: 13px; font-weight: 500;
+  padding: 8px 15px; border: 0; background: transparent; color: var(--text-dim);
+  cursor: pointer; border-right: 1px solid var(--line); transition: background .12s, color .12s;
+}
+.seg button:last-child { border-right: 0; }
+.seg button:hover { background: var(--surface-2); color: var(--text); }
+.seg button[aria-pressed="true"] { background: var(--ember); color: #fff; font-weight: 600; }
+.seg button:focus-visible { outline: 2px solid var(--ember); outline-offset: -2px; }
+
+/* ---------- tiles ---------- */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 14px; margin: 26px 0; }
+.tile {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 18px 16px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+}
+.tile::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--line); }
+.tile.up::before { background: var(--ember); }
+.tile.down::before { background: var(--teal); }
+.tile-label {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text-mute); margin-bottom: 10px; font-weight: 500;
+}
+.tile-value {
+  font-family: var(--display); font-weight: 700; font-size: 33px; line-height: 1;
+  letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+}
+.tile.up .tile-value { color: var(--ember); }
+.tile.down .tile-value { color: var(--teal); }
+.tile-sub { font-family: var(--mono); font-size: 11.5px; color: var(--text-mute); margin-top: 8px; }
+
+/* ---------- sections ---------- */
+section { margin: 44px 0 0; }
+h2 {
+  font-family: var(--display); font-weight: 700; font-size: 20px; letter-spacing: -.01em;
+  margin: 0 0 6px; display: flex; align-items: baseline; gap: 12px;
+}
+h2 .n {
+  font-family: var(--mono); font-size: 11px; color: var(--text-mute);
+  font-weight: 500; letter-spacing: .1em;
+}
+.sec-note { color: var(--text-dim); font-size: 14px; margin: 0 0 18px; max-width: 68ch; }
+
+.panel {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; padding: 20px; box-shadow: var(--shadow);
+}
+
+/* ---------- distribution ---------- */
+.dist { display: flex; flex-direction: column; gap: 3px; }
+.dist-row { display: grid; grid-template-columns: 108px 1fr 92px; align-items: center; gap: 12px; }
+.dist-key { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); text-align: right; }
+.dist-track { background: var(--surface-2); border-radius: 3px; height: 22px; position: relative; overflow: hidden; }
+.dist-bar { height: 100%; border-radius: 3px; transition: width .35s cubic-bezier(.4,0,.2,1); }
+.dist-bar.neg { background: var(--teal); }
+.dist-bar.pos { background: var(--ember); }
+.dist-bar.zero { background: var(--text-mute); }
+.dist-val {
+  font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+/* ---------- tables ---------- */
+.tbl-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-mute); font-weight: 500; text-align: right; padding: 0 0 10px; white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+th:first-child, td:first-child { text-align: left; }
+td {
+  padding: 10px 0; border-bottom: 1px solid var(--line-soft); text-align: right;
+  font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+td:first-child { font-family: var(--sans); }
+th + th, td + td { padding-left: 18px; }
+tr:last-child td { border-bottom: 0; }
+.pos { color: var(--ember); }
+.neg { color: var(--teal); }
+.pid { font-family: var(--mono); font-size: 11px; color: var(--text-mute); display: block; }
+.chip {
+  display: inline-block; font-family: var(--mono); font-size: 10.5px; padding: 2px 7px;
+  border-radius: 4px; font-weight: 500;
+}
+.chip.pos { background: var(--ember-soft); color: var(--ember); }
+.chip.neg { background: var(--teal-soft); color: var(--teal); }
+
+/* ---------- scenario cards ---------- */
+.scen { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.scen-card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px; box-shadow: var(--shadow);
+}
+.scen-card h3 { font-family: var(--display); font-size: 14.5px; font-weight: 700; margin: 0 0 4px; }
+.scen-card p { font-size: 12.5px; color: var(--text-dim); margin: 0 0 14px; line-height: 1.45; }
+.scen-stat { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line-soft); }
+.scen-stat span:first-child { font-size: 12px; color: var(--text-mute); }
+.scen-stat span:last-child { font-family: var(--mono); font-size: 13.5px; font-variant-numeric: tabular-nums; font-weight: 500; }
+
+/* ---------- callout ---------- */
+.callout {
+  border-left: 3px solid var(--ember); background: var(--surface);
+  border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 20px 0;
+  border-top: 1px solid var(--line); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.callout p { margin: 0; font-size: 14px; color: var(--text-dim); }
+.callout strong { color: var(--text); }
+
+/* ---------- method ---------- */
+.method { font-size: 13.5px; color: var(--text-dim); }
+.method li { margin-bottom: 8px; }
+.method code {
+  font-family: var(--mono); font-size: 12px; background: var(--surface-2);
+  padding: 1.5px 5px; border-radius: 4px; color: var(--text);
+}
+footer {
+  margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--line);
+  font-family: var(--mono); font-size: 11.5px; color: var(--text-mute);
+}
+a { color: var(--ember); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 620px) {
+  .dist-row { grid-template-columns: 84px 1fr 70px; gap: 8px; }
+  .controls { position: static; }
+}
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">SIMD-0553 &middot; Base Inclusion and Resource Fee</p>
+  <h1>How would SIMD-0553 reprice the traffic already on Solana?</h1>
+  <p class="lede">
+    Every transaction in this sample was re-priced under the proposed fee model by recomputing
+    <strong>requested_cost_units</strong> the way a validator does before execution &mdash; then compared against
+    the fee it actually paid on chain.
+  </p>
+  <div class="provenance" id="prov"></div>
+
+  <div class="controls">
+    <div class="ctl-group">
+      <span class="ctl-label">Fee gate</span>
+      <div class="seg" id="gateSel" role="group" aria-label="Resource fee rate"></div>
+    </div>
+    <div class="ctl-group">
+      <span class="ctl-label">Population</span>
+      <div class="seg" id="cohortSel" role="group" aria-label="Transaction population"></div>
+    </div>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="callout" id="headline"></div>
+
+  <section>
+    <h2><span class="n">01</span> Distribution of fee change</h2>
+    <p class="sec-note">Share of transactions landing in each band, relative to what they paid today.</p>
+    <div class="panel"><div class="dist" id="dist"></div></div>
+  </section>
+
+  <section>
+    <h2><span class="n">02</span> Who over-requests</h2>
+    <p class="sec-note">
+      The fee is charged on what a transaction <em>asks for</em>, not what it uses. These four cohorts split the
+      sample by whether it declares a compute-unit limit and a loaded-accounts-data-size limit.
+    </p>
+    <div class="panel tbl-scroll">
+      <table id="patternTbl"></table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">03</span> By requested cost units</h2>
+    <p class="sec-note">Fee change grouped by how much block space the transaction reserves.</p>
+    <div class="panel tbl-scroll"><table id="bucketTbl"></table></div>
+  </section>
+
+  <section>
+    <h2><span class="n">04</span> By program</h2>
+    <p class="sec-note">The 20 programs that account for the most transactions in the sample, by the last non-ComputeBudget instruction.</p>
+    <div class="panel tbl-scroll"><table id="progTbl"></table></div>
+  </section>
+
+  <section>
+    <h2><span class="n">05</span> Scenarios</h2>
+    <p class="sec-note">
+      The proposal assumes senders start requesting accurately. These compare the sample as-is against two
+      counterfactuals, at the selected gate.
+    </p>
+    <div class="scen" id="scen"></div>
+  </section>
+
+  <section>
+    <h2><span class="n">06</span> Method</h2>
+    <div class="panel method">
+      <ul id="assumptions"></ul>
+      <p style="margin-bottom:0">
+        The one trap worth naming: <code>meta.costUnits</code> in the RPC response is the
+        <em>executed</em> cost &mdash; agave fills it from <code>calculate_cost_for_executed_transaction</code>
+        using actual consumed CU and actual loaded bytes. SIMD-0553 charges on the
+        <em>requested</em> cost from <code>calculate_cost</code>. Building this off
+        <code>meta.costUnits</code> understates the fee on exactly the transactions the proposal targets.
+      </p>
+    </div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<script id="summary" type="application/json">{
+ "meta": {
+  "generatedAt": "2026-08-21T01:20:02.914Z",
+  "source": "data/txs.jsonl",
+  "blocks": 260,
+  "transactions": 467622,
+  "votes": 181487,
+  "votePct": 38.810620543943614,
+  "failed": 129801,
+  "txPerBlock": 1798.5461538461539,
+  "slotsPerDay": 216000,
+  "projectedTxPerDay": 388485969.2307692,
+  "setsCuLimitPct": 56.769570293955375,
+  "setsLoadedSizePct": 33.19796758920667,
+  "avgRequestedCostUnits": 128180.35640538725,
+  "avgConsumedCu": 25762.917277202527,
+  "loadedDefaultTotal": 5550016240,
+  "loadedActualTotal": 565826240,
+  "loadedWastePct": 89.80496244457836,
+  "optimizeEligible": 467622,
+  "cuHeadroom": 1.1,
+  "assumptions": [
+   "requested_cost_units recomputed from agave CostModel::calculate_cost (NOT meta.costUnits, which is the executed cost)",
+   "today fee taken from meta.fee (ground truth); priority = meta.fee - 5000*num_signatures",
+   "today burn = 50% of signature fee; priority fees 100% to leader (SIMD-0096)",
+   "daily projection = measured txs/block * 216000 slots/day",
+   "vote program priced at the 3k builtin allocation: feature bls_pubkey_management_in_vote_account (AnAP9zPV4KL7czAPQbFhpDKV2tx7g4UGNbK9wvXwjaRo) is staged but NOT active on mainnet. The voteMigratedScenario block shows what happens when it activates.",
+   "optimized scenario = request CU at 1.1x what the tx actually consumed and set loaded-accounts-data-size to the actual bytes loaded (both recovered from chain data)"
+  ]
+ },
+ "gates": {
+  "g1_10": {
+   "label": "1/10",
+   "all": {
+    "n": 467622,
+    "pctMore": 43.627759173007256,
+    "pctLess": 56.37224082699274,
+    "pctSame": 0,
+    "more": 204013,
+    "less": 263609,
+    "same": 0,
+    "avgTodayFee": 21621.71293052936,
+    "avgNewFee": 31722.750075916018,
+    "totalTodayFee": 10110788644,
+    "totalNewFee": 14834255836,
+    "totalTodayBurn": 1219932500,
+    "totalNewBurn": 5994277192,
+    "leaderToday": 8890856144,
+    "leaderNew": 8839978644,
+    "p": {
+     "p1": -45.744891886530446,
+     "p5": -44.50019297568507,
+     "p25": -8.5,
+     "p50": -8.5,
+     "p75": 118.47821782178218,
+     "p95": 670.6142034548944,
+     "p99": 1813.4203844758797
+    },
+    "buckets": {
+     "<-50%": 2142,
+     "-50..-25%": 53172,
+     "-25..-10%": 16249,
+     "-10..0%": 192046,
+     "no change": 0,
+     "0..+25%": 20042,
+     "+25..+100%": 43883,
+     "+100..+500%": 86708,
+     "+500..+2000%": 51810,
+     ">+2000%": 1570
+    }
+   },
+   "vote": {
+    "n": 181487,
+    "pctMore": 0,
+    "pctLess": 100,
+    "pctSame": 0,
+    "more": 0,
+    "less": 181487,
+    "same": 0,
+    "avgTodayFee": 5035.897888002997,
+    "avgNewFee": 4575.508267809815,
+    "totalTodayFee": 913950000,
+    "totalNewFee": 830395269,
+    "totalTodayBurn": 456975000,
+    "totalNewBurn": 376677769,
+    "leaderToday": 456975000,
+    "leaderNew": 453717500,
+    "p": {
+     "p1": -8.52,
+     "p5": -8.5,
+     "p25": -8.5,
+     "p50": -8.5,
+     "p75": -8.5,
+     "p95": -8.5,
+     "p99": -8.5
+    },
+    "buckets": {
+     "<-50%": 1303,
+     "-50..-25%": 0,
+     "-25..-10%": 0,
+     "-10..0%": 180184,
+     "no change": 0,
+     "0..+25%": 0,
+     "+25..+100%": 0,
+     "+100..+500%": 0,
+     "+500..+2000%": 0,
+     ">+2000%": 0
+    }
+   },
+   "nonVote": {
+    "n": 286135,
+    "pctMore": 71.29956139584462,
+    "pctLess": 28.70043860415538,
+    "pctSame": 0,
+    "more": 204013,
+    "less": 82122,
+    "same": 0,
+    "avgTodayFee": 32141.60673807818,
+    "avgNewFee": 48941.44570569836,
+    "totalTodayFee": 9196838644,
+    "totalNewFee": 14003860567,
+    "totalTodayBurn": 762957500,
+    "totalNewBurn": 5617599423,
+    "leaderToday": 8433881144,
+    "leaderNew": 8386261144,
+    "p": {
+     "p1": -45.744891886530446,
+     "p5": -45.449101796407184,
+     "p25": -8.58,
+     "p50": 97.48930099857347,
+     "p75": 336.34,
+     "p95": 1054.528886458903,
+     "p99": 1965.7821782178216
+    },
+    "buckets": {
+     "<-50%": 839,
+     "-50..-25%": 53172,
+     "-25..-10%": 16249,
+     "-10..0%": 11862,
+     "no change": 0,
+     "0..+25%": 20042,
+     "+25..+100%": 43883,
+     "+100..+500%": 86708,
+     "+500..+2000%": 51810,
+     ">+2000%": 1570
+    }
+   },
+   "optimized": {
+    "n": 467622,
+    "pctMore": 26.829789873017095,
+    "pctLess": 73.16721625586477,
+    "pctSame": 0.0029938711181253233,
+    "more": 125462,
+    "less": 342146,
+    "same": 14,
+    "avgTodayFee": 21621.71293052936,
+    "avgNewFee": 22163.75023844045,
+    "totalTodayFee": 10110788644,
+    "totalNewFee": 10364257214,
+    "totalTodayBurn": 1219932500,
+    "totalNewBurn": 1524278570,
+    "leaderToday": 8890856144,
+    "leaderNew": 8839978644,
+    "p": {
+     "p1": -59.75833333333333,
+     "p5": -45.440000000000005,
+     "p25": -42.64,
+     "p50": -42.64,
+     "p75": 3.171641791044776,
+     "p95": 175.06347479143997,
+     "p99": 329.1275430359937
+    },
+    "buckets": {
+     "<-50%": 5767,
+     "-50..-25%": 283814,
+     "-25..-10%": 34627,
+     "-10..0%": 17938,
+     "no change": 14,
+     "0..+25%": 40641,
+     "+25..+100%": 36519,
+     "+100..+500%": 46971,
+     "+500..+2000%": 1316,
+     ">+2000%": 15
+    }
+   },
+   "voteMigratedScenario": {
+    "n": 467622,
+    "pctMore": 82.43837971695088,
+    "pctLess": 17.56162028304913,
+    "pctSame": 0,
+    "more": 385500,
+    "less": 82122,
+    "same": 0,
+    "avgTodayFee": 21621.71293052936,
+    "avgNewFee": 39368.44232307291,
+    "totalTodayFee": 10110788644,
+    "totalNewFee": 18409549736,
+    "totalTodayBurn": 1219932500,
+    "totalNewBurn": 9569571092,
+    "leaderToday": 8890856144,
+    "leaderNew": 8839978644,
+    "p": {
+     "p1": -45.58,
+     "p5": -44.28653735356251,
+     "p25": 38.34,
+     "p50": 385.5,
+     "p75": 385.5,
+     "p95": 670.6142034548944,
+     "p99": 1813.4203844758797
+    },
+    "buckets": {
+     "<-50%": 839,
+     "-50..-25%": 53172,
+     "-25..-10%": 16249,
+     "-10..0%": 11862,
+     "no change": 0,
+     "0..+25%": 20042,
+     "+25..+100%": 43883,
+     "+100..+500%": 268195,
+     "+500..+2000%": 51810,
+     ">+2000%": 1570
+    }
+   },
+   "byPattern": {
+    "neither": {
+     "n": 202155,
+     "pctMore": 8.886250649254285,
+     "pctLess": 91.1137493507457,
+     "pctSame": 0,
+     "more": 17964,
+     "less": 184191,
+     "same": 0,
+     "avgTodayFee": 5428.310192673938,
+     "avgNewFee": 10899.524676609532,
+     "totalTodayFee": 1097360047,
+     "totalNewFee": 2203393411,
+     "totalTodayBurn": 526585000,
+     "totalNewBurn": 1653815864,
+     "leaderToday": 570775047,
+     "leaderNew": 549577547,
+     "p": {
+      "p1": -8.58,
+      "p5": -8.5,
+      "p25": -8.5,
+      "p50": -8.5,
+      "p75": -8.5,
+      "p95": 786.0400000000001,
+      "p99": 1813.4203844758797
+     },
+     "buckets": {
+      "<-50%": 1552,
+      "-50..-25%": 332,
+      "-25..-10%": 2,
+      "-10..0%": 182305,
+      "no change": 0,
+      "0..+25%": 118,
+      "+25..+100%": 246,
+      "+100..+500%": 5358,
+      "+500..+2000%": 11494,
+      ">+2000%": 748
+     }
+    },
+    "cuOnly": {
+     "n": 110226,
+     "pctMore": 82.29092954475351,
+     "pctLess": 17.709070455246493,
+     "pctSame": 0,
+     "more": 90706,
+     "less": 19520,
+     "same": 0,
+     "avgTodayFee": 60015.63919583402,
+     "avgNewFee": 80064.31832779925,
+     "totalTodayFee": 6615283846,
+     "totalNewFee": 8825169552,
+     "totalTodayBurn": 305205000,
+     "totalNewBurn": 2544730706,
+     "leaderToday": 6310078846,
+     "leaderNew": 6280438846,
+     "p": {
+      "p1": -36.25637436256374,
+      "p5": -13.034146341463416,
+      "p25": 18.582857142857144,
+      "p50": 119.19368974583699,
+      "p75": 426.36,
+      "p95": 986.98,
+      "p99": 1966.3762376237623
+     },
+     "buckets": {
+      "<-50%": 589,
+      "-50..-25%": 1214,
+      "-25..-10%": 11775,
+      "-10..0%": 5942,
+      "no change": 0,
+      "0..+25%": 9465,
+      "+25..+100%": 22972,
+      "+100..+500%": 34050,
+      "+500..+2000%": 23419,
+      ">+2000%": 800
+     }
+    },
+    "loadedOnly": {
+     "n": 0,
+     "pctMore": 0,
+     "pctLess": 0,
+     "pctSame": 0,
+     "more": 0,
+     "less": 0,
+     "same": 0,
+     "avgTodayFee": 0,
+     "avgNewFee": 0,
+     "totalTodayFee": 0,
+     "totalNewFee": 0,
+     "totalTodayBurn": 0,
+     "totalNewBurn": 0,
+     "leaderToday": 0,
+     "leaderNew": 0,
+     "p": {
+      "p1": 0,
+      "p5": 0,
+      "p25": 0,
+      "p50": 0,
+      "p75": 0,
+      "p95": 0,
+      "p99": 0
+     },
+     "buckets": {
+      "<-50%": 0,
+      "-50..-25%": 0,
+      "-25..-10%": 0,
+      "-10..0%": 0,
+      "no change": 0,
+      "0..+25%": 0,
+      "+25..+100%": 0,
+      "+100..+500%": 0,
+      "+500..+2000%": 0,
+      ">+2000%": 0
+     }
+    },
+    "both": {
+     "n": 155241,
+     "pctMore": 61.41612074129901,
+     "pctLess": 38.58387925870099,
+     "pctSame": 0,
+     "more": 95343,
+     "less": 59898,
+     "same": 0,
+     "avgTodayFee": 15447.882653422743,
+     "avgNewFee": 24514.740777243125,
+     "totalTodayFee": 2398144751,
+     "totalNewFee": 3805692873,
+     "totalTodayBurn": 388142500,
+     "totalNewBurn": 1795730622,
+     "leaderToday": 2010002251,
+     "leaderNew": 2009962251,
+     "p": {
+      "p1": -45.744891886530446,
+      "p5": -45.540000000000006,
+      "p25": -34.90410958904109,
+      "p50": 62.29194906779849,
+      "p75": 136.63578047042054,
+      "p95": 592.04,
+      "p99": 700.6999999999999
+     },
+     "buckets": {
+      "<-50%": 1,
+      "-50..-25%": 51626,
+      "-25..-10%": 4472,
+      "-10..0%": 3799,
+      "no change": 0,
+      "0..+25%": 10459,
+      "+25..+100%": 20665,
+      "+100..+500%": 47300,
+      "+500..+2000%": 16897,
+      ">+2000%": 22
+     }
+    }
+   },
+   "byCostBucket": [
+    [
+     "<10k",
+     {
+      "n": 59379,
+      "pctMore": 0,
+      "pctLess": 100,
+      "pctSame": 0,
+      "more": 0,
+      "less": 59379,
+      "same": 0,
+      "avgTodayFee": 8399.82345610401,
+      "avgNewFee": 6158.949089745533,
+      "totalTodayFee": 498773117,
+      "totalNewFee": 365712238,
+      "totalTodayBurn": 148447500,
+      "totalNewBurn": 15386621,
+      "leaderToday": 350325617,
+      "leaderNew": 350325617,
+      "p": {
+       "p1": -46.68,
+       "p5": -45.58,
+       "p25": -45.14,
+       "p50": -40.24866785079929,
+       "p75": -26.976470588235298,
+       "p95": -6.9,
+       "p99": -6.663693131132916
+      },
+      "buckets": {
+       "<-50%": 0,
+       "-50..-25%": 51403,
+       "-25..-10%": 4387,
+       "-10..0%": 3589,
+       "no change": 0,
+       "0..+25%": 0,
+       "+25..+100%": 0,
+       "+100..+500%": 0,
+       "+500..+2000%": 0,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     "10-25k",
+     {
+      "n": 200489,
+      "pctMore": 0,
+      "pctLess": 100,
+      "pctSame": 0,
+      "more": 0,
+      "less": 200489,
+      "same": 0,
+      "avgTodayFee": 7947.380075714877,
+      "avgNewFee": 7455.954436402994,
+      "totalTodayFee": 1593362284,
+      "totalNewFee": 1494836849,
+      "totalTodayBurn": 506522500,
+      "totalNewBurn": 413297065,
+      "leaderToday": 1086839784,
+      "leaderNew": 1081539784,
+      "p": {
+       "p1": -50.121996996997,
+       "p5": -11.68,
+       "p25": -8.5,
+       "p50": -8.5,
+       "p75": -8.5,
+       "p95": -8.5,
+       "p99": -4.999000199960008
+      },
+      "buckets": {
+       "<-50%": 2037,
+       "-50..-25%": 260,
+       "-25..-10%": 10686,
+       "-10..0%": 187506,
+       "no change": 0,
+       "0..+25%": 0,
+       "+25..+100%": 0,
+       "+100..+500%": 0,
+       "+500..+2000%": 0,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     "25-50k",
+     {
+      "n": 16620,
+      "pctMore": 88.19494584837545,
+      "pctLess": 11.805054151624548,
+      "pctSame": 0,
+      "more": 14658,
+      "less": 1962,
+      "same": 0,
+      "avgTodayFee": 6470.453429602888,
+      "avgNewFee": 7278.2480144404335,
+      "totalTodayFee": 107538936,
+      "totalNewFee": 120964482,
+      "totalTodayBurn": 46810000,
+      "totalNewBurn": 65495546,
+      "leaderToday": 60728936,
+      "leaderNew": 55468936,
+      "p": {
+       "p1": -47.23638180909545,
+       "p5": -36.25637436256374,
+       "p25": 12.265281662005593,
+       "p50": 37.737357585448734,
+       "p75": 37.737357585448734,
+       "p95": 42.84905660377358,
+       "p99": 42.84905660377358
+      },
+      "buckets": {
+       "<-50%": 76,
+       "-50..-25%": 1473,
+       "-25..-10%": 384,
+       "-10..0%": 29,
+       "no change": 0,
+       "0..+25%": 5208,
+       "+25..+100%": 9450,
+       "+100..+500%": 0,
+       "+500..+2000%": 0,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     "50-100k",
+     {
+      "n": 48121,
+      "pctMore": 97.07819870742503,
+      "pctLess": 2.9218012925749672,
+      "pctSame": 0,
+      "more": 46715,
+      "less": 1406,
+      "same": 0,
+      "avgTodayFee": 18583.262276345045,
+      "avgNewFee": 24207.797593566218,
+      "totalTodayFee": 894245164,
+      "totalNewFee": 1164903428,
+      "totalTodayBurn": 126220000,
+      "totalNewBurn": 402795764,
+      "leaderToday": 768025164,
+      "leaderNew": 762107664,
+      "p": {
+       "p1": -13.13662743396431,
+       "p5": 4.395458174399006,
+       "p25": 59.36475409836065,
+       "p50": 101.1384062312762,
+       "p75": 113.89936076053107,
+       "p95": 131.84725013703635,
+       "p99": 145.49381504025132
+      },
+      "buckets": {
+       "<-50%": 29,
+       "-50..-25%": 36,
+       "-25..-10%": 784,
+       "-10..0%": 557,
+       "no change": 0,
+       "0..+25%": 6563,
+       "+25..+100%": 14812,
+       "+100..+500%": 25340,
+       "+500..+2000%": 0,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     "100-250k",
+     {
+      "n": 54817,
+      "pctMore": 99.31955415290878,
+      "pctLess": 0.6804458470912309,
+      "pctSame": 0,
+      "more": 54444,
+      "less": 373,
+      "same": 0,
+      "avgTodayFee": 55366.01537844099,
+      "avgNewFee": 69012.368663006,
+      "totalTodayFee": 3034998865,
+      "totalNewFee": 3783051013,
+      "totalTodayBurn": 144802500,
+      "totalNewBurn": 900614648,
+      "leaderToday": 2890196365,
+      "leaderNew": 2882436365,
+      "p": {
+       "p1": 0.7778732372935301,
+       "p5": 10.665559644556144,
+       "p25": 91.83809523809524,
+       "p50": 144.85,
+       "p75": 243.9,
+       "p95": 386.02,
+       "p99": 401.82000000000005
+      },
+      "buckets": {
+       "<-50%": 0,
+       "-50..-25%": 0,
+       "-25..-10%": 8,
+       "-10..0%": 365,
+       "no change": 0,
+       "0..+25%": 4870,
+       "+25..+100%": 10038,
+       "+100..+500%": 39536,
+       "+500..+2000%": 0,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     "250-500k",
+     {
+      "n": 66176,
+      "pctMore": 100,
+      "pctLess": 0,
+      "pctSame": 0,
+      "more": 66176,
+      "less": 0,
+      "same": 0,
+      "avgTodayFee": 47659.49209683269,
+      "avgNewFee": 79707.25615026595,
+      "totalTodayFee": 3153914549,
+      "totalNewFee": 5274707383,
+      "totalTodayBurn": 173292500,
+      "totalNewBurn": 2301937834,
+      "leaderToday": 2980622049,
+      "leaderNew": 2972769549,
+      "p": {
+       "p1": 2.957512437810945,
+       "p5": 28.194285714285716,
+       "p25": 225.33282616964624,
+       "p50": 531.64,
+       "p75": 591.92,
+       "p95": 760.6799846331157,
+       "p99": 792.62
+      },
+      "buckets": {
+       "<-50%": 0,
+       "-50..-25%": 0,
+       "-25..-10%": 0,
+       "-10..0%": 0,
+       "no change": 0,
+       "0..+25%": 2891,
+       "+25..+100%": 8821,
+       "+100..+500%": 18443,
+       "+500..+2000%": 36021,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     ">500k",
+     {
+      "n": 22020,
+      "pctMore": 100,
+      "pctLess": 0,
+      "pctSame": 0,
+      "more": 22020,
+      "less": 0,
+      "same": 0,
+      "avgTodayFee": 37600.16934604905,
+      "avgNewFee": 119440.528746594,
+      "totalTodayFee": 827955729,
+      "totalNewFee": 2630080443,
+      "totalTodayBurn": 73837500,
+      "totalNewBurn": 1894749714,
+      "leaderToday": 754118229,
+      "leaderNew": 735330729,
+      "p": {
+       "p1": 10.486341463414634,
+       "p5": 87.41314640595216,
+       "p25": 607.8254900465258,
+       "p50": 1255.77768892443,
+       "p75": 1596.24,
+       "p95": 2783.02752293578,
+       "p99": 2791.44
+      },
+      "buckets": {
+       "<-50%": 0,
+       "-50..-25%": 0,
+       "-25..-10%": 0,
+       "-10..0%": 0,
+       "no change": 0,
+       "0..+25%": 510,
+       "+25..+100%": 762,
+       "+100..+500%": 3389,
+       "+500..+2000%": 15789,
+       ">+2000%": 1570
+      }
+     }
+    ]
+   ],
+   "burn": {
+    "todayPerDaySol": 1013.4823846153845,
+    "newPerDaySol": 4979.861051815385,
+    "multiple": 4.913613820436787,
+    "optimizedPerDaySol": 1266.3237350769232,
+    "voteMigratedPerDaySol": 7950.105214892307
+   },
+   "leader": {
+    "todayPerDaySol": 7386.249719630769,
+    "newPerDaySol": 7343.982258092307,
+    "changePct": -0.5722452278607018
+   }
+  },
+  "g1_4": {
+   "label": "1/4",
+   "all": {
+    "n": 467622,
+    "pctMore": 86.7392894260749,
+    "pctLess": 13.260710573925094,
+    "pctSame": 0,
+    "more": 405612,
+    "less": 62010,
+    "same": 0,
+    "avgTodayFee": 21621.71293052936,
+    "avgNewFee": 50949.708191659076,
+    "totalTodayFee": 10110788644,
+    "totalNewFee": 23825204444,
+    "totalTodayBurn": 1219932500,
+    "totalNewBurn": 14985225800,
+    "leaderToday": 8890856144,
+    "leaderNew": 8839978644,
+    "p": {
+     "p1": -39.34778363600859,
+     "p5": -37.86,
+     "p25": 53.72,
+     "p50": 53.72,
+     "p75": 356.4896166134185,
+     "p95": 1743.5471554028254,
+     "p99": 4601.541530649256
+    },
+    "buckets": {
+     "<-50%": 19,
+     "-50..-25%": 39755,
+     "-25..-10%": 17945,
+     "-10..0%": 4291,
+     "no change": 0,
+     "0..+25%": 8687,
+     "+25..+100%": 214018,
+     "+100..+500%": 89267,
+     "+500..+2000%": 75276,
+     ">+2000%": 18364
+    }
+   },
+   "vote": {
+    "n": 181487,
+    "pctMore": 99.28204223994005,
+    "pctLess": 0.7179577600599493,
+    "pctSame": 0,
+    "more": 180184,
+    "less": 1303,
+    "same": 0,
+    "avgTodayFee": 5035.897888002997,
+    "avgNewFee": 7687.283634640497,
+    "totalTodayFee": 913950000,
+    "totalNewFee": 1395142045,
+    "totalTodayBurn": 456975000,
+    "totalNewBurn": 941424545,
+    "leaderToday": 456975000,
+    "leaderNew": 453717500,
+    "p": {
+     "p1": 53.7,
+     "p5": 53.72,
+     "p25": 53.72,
+     "p50": 53.72,
+     "p75": 53.72,
+     "p95": 53.72,
+     "p99": 53.72
+    },
+    "buckets": {
+     "<-50%": 0,
+     "-50..-25%": 0,
+     "-25..-10%": 1303,
+     "-10..0%": 0,
+     "no change": 0,
+     "0..+25%": 0,
+     "+25..+100%": 180184,
+     "+100..+500%": 0,
+     "+500..+2000%": 0,
+     ">+2000%": 0
+    }
+   },
+   "nonVote": {
+    "n": 286135,
+    "pctMore": 78.78379086794695,
+    "pctLess": 21.216209132053052,
+    "pctSame": 0,
+    "more": 225428,
+    "less": 60707,
+    "same": 0,
+    "avgTodayFee": 32141.60673807818,
+    "avgNewFee": 78389.78943156202,
+    "totalTodayFee": 9196838644,
+    "totalNewFee": 22430062399,
+    "totalTodayBurn": 762957500,
+    "totalNewBurn": 14043801255,
+    "leaderToday": 8433881144,
+    "leaderNew": 8386261144,
+    "p": {
+     "p1": -39.649744195198735,
+     "p5": -38.84,
+     "p25": 28.285024459922386,
+     "p50": 296.36951833213516,
+     "p75": 896.96,
+     "p95": 2705.163043478261,
+     "p99": 4988.6732673267325
+    },
+    "buckets": {
+     "<-50%": 19,
+     "-50..-25%": 39755,
+     "-25..-10%": 16642,
+     "-10..0%": 4291,
+     "no change": 0,
+     "0..+25%": 8687,
+     "+25..+100%": 33834,
+     "+100..+500%": 89267,
+     "+500..+2000%": 75276,
+     ">+2000%": 18364
+    }
+   },
+   "optimized": {
+    "n": 467622,
+    "pctMore": 34.52446634247319,
+    "pctLess": 65.47168439466064,
+    "pctSame": 0.0038492628661611302,
+    "more": 161444,
+    "less": 306160,
+    "same": 18,
+    "avgTodayFee": 21621.71293052936,
+    "avgNewFee": 27052.330484878814,
+    "totalTodayFee": 10110788644,
+    "totalNewFee": 12650264886,
+    "totalTodayBurn": 1219932500,
+    "totalNewBurn": 3810286242,
+    "leaderToday": 8890856144,
+    "leaderNew": 8839978644,
+    "p": {
+     "p1": -47.599999999999994,
+     "p5": -39.34,
+     "p25": -31.619999999999997,
+     "p50": -31.619999999999997,
+     "p75": 28.23047619047619,
+     "p95": 505.74604370761114,
+     "p99": 893.2297660145762
+    },
+    "buckets": {
+     "<-50%": 4567,
+     "-50..-25%": 243300,
+     "-25..-10%": 27593,
+     "-10..0%": 30700,
+     "no change": 18,
+     "0..+25%": 39992,
+     "+25..+100%": 33144,
+     "+100..+500%": 64196,
+     "+500..+2000%": 23586,
+     ">+2000%": 526
+    }
+   },
+   "voteMigratedScenario": {
+    "n": 467622,
+    "pctMore": 87.01793328799758,
+    "pctLess": 12.98206671200243,
+    "pctSame": 0,
+    "more": 406915,
+    "less": 60707,
+    "same": 0,
+    "avgTodayFee": 21621.71293052936,
+    "avgNewFee": 70063.9388095513,
+    "totalTodayFee": 10110788644,
+    "totalNewFee": 32763439194,
+    "totalTodayBurn": 1219932500,
+    "totalNewBurn": 23923460550,
+    "leaderToday": 8890856144,
+    "leaderNew": 8839978644,
+    "p": {
+     "p1": -39.34778363600859,
+     "p5": -37.86,
+     "p25": 169.29842094743154,
+     "p50": 1038.72,
+     "p75": 1038.72,
+     "p95": 1743.5471554028254,
+     "p99": 4601.541530649256
+    },
+    "buckets": {
+     "<-50%": 19,
+     "-50..-25%": 39755,
+     "-25..-10%": 16642,
+     "-10..0%": 4291,
+     "no change": 0,
+     "0..+25%": 8687,
+     "+25..+100%": 33834,
+     "+100..+500%": 90570,
+     "+500..+2000%": 255460,
+     ">+2000%": 18364
+    }
+   },
+   "byPattern": {
+    "neither": {
+     "n": 202155,
+     "pctMore": 99.06655783928174,
+     "pctLess": 0.9334421607182607,
+     "pctSame": 0,
+     "more": 200268,
+     "less": 1887,
+     "same": 0,
+     "avgTodayFee": 5428.310192673938,
+     "avgNewFee": 23169.518676263262,
+     "totalTodayFee": 1097360047,
+     "totalNewFee": 4683834048,
+     "totalTodayBurn": 526585000,
+     "totalNewBurn": 4134256501,
+     "leaderToday": 570775047,
+     "leaderNew": 549577547,
+     "p": {
+      "p1": 49.53239436619719,
+      "p5": 53.72,
+      "p25": 53.72,
+      "p50": 53.72,
+      "p75": 53.72,
+      "p95": 2040.1,
+      "p99": 4601.541530649256
+     },
+     "buckets": {
+      "<-50%": 13,
+      "-50..-25%": 55,
+      "-25..-10%": 1487,
+      "-10..0%": 332,
+      "no change": 0,
+      "0..+25%": 6,
+      "+25..+100%": 182367,
+      "+100..+500%": 879,
+      "+500..+2000%": 6398,
+      ">+2000%": 10618
+     }
+    },
+    "cuOnly": {
+     "n": 110226,
+     "pctMore": 99.32774481519787,
+     "pctLess": 0.6722551848021339,
+     "pctSame": 0,
+     "more": 109485,
+     "less": 741,
+     "same": 0,
+     "avgTodayFee": 60015.63919583402,
+     "avgNewFee": 114693.37630867491,
+     "totalTodayFee": 6615283846,
+     "totalNewFee": 12642192097,
+     "totalTodayBurn": 305205000,
+     "totalNewBurn": 6361753251,
+     "leaderToday": 6310078846,
+     "leaderNew": 6280438846,
+     "p": {
+      "p1": 1.0088639200998752,
+      "p5": 18.242857142857144,
+      "p25": 68.90258311973969,
+      "p50": 350.7,
+      "p75": 1123.3290261952309,
+      "p95": 2541.96,
+      "p99": 4990.158415841584
+     },
+     "buckets": {
+      "<-50%": 6,
+      "-50..-25%": 398,
+      "-25..-10%": 222,
+      "-10..0%": 115,
+      "no change": 0,
+      "0..+25%": 7174,
+      "+25..+100%": 23785,
+      "+100..+500%": 34283,
+      "+500..+2000%": 36908,
+      ">+2000%": 7335
+     }
+    },
+    "loadedOnly": {
+     "n": 0,
+     "pctMore": 0,
+     "pctLess": 0,
+     "pctSame": 0,
+     "more": 0,
+     "less": 0,
+     "same": 0,
+     "avgTodayFee": 0,
+     "avgNewFee": 0,
+     "totalTodayFee": 0,
+     "totalNewFee": 0,
+     "totalTodayBurn": 0,
+     "totalNewBurn": 0,
+     "leaderToday": 0,
+     "leaderNew": 0,
+     "p": {
+      "p1": 0,
+      "p5": 0,
+      "p25": 0,
+      "p50": 0,
+      "p75": 0,
+      "p95": 0,
+      "p99": 0
+     },
+     "buckets": {
+      "<-50%": 0,
+      "-50..-25%": 0,
+      "-25..-10%": 0,
+      "-10..0%": 0,
+      "no change": 0,
+      "0..+25%": 0,
+      "+25..+100%": 0,
+      "+100..+500%": 0,
+      "+500..+2000%": 0,
+      ">+2000%": 0
+     }
+    },
+    "both": {
+     "n": 155241,
+     "pctMore": 61.748507159835356,
+     "pctLess": 38.251492840164644,
+     "pctSame": 0,
+     "more": 95859,
+     "less": 59382,
+     "same": 0,
+     "avgTodayFee": 15447.882653422743,
+     "avgNewFee": 41865.08911305647,
+     "totalTodayFee": 2398144751,
+     "totalNewFee": 6499178299,
+     "totalTodayBurn": 388142500,
+     "totalNewBurn": 4489216048,
+     "leaderToday": 2010002251,
+     "leaderNew": 2009962251,
+     "p": {
+      "p1": -39.97222773259274,
+      "p5": -38.98,
+      "p25": -25.0749850029994,
+      "p50": 180.4380140719453,
+      "p75": 408.37491090520314,
+      "p95": 1554.06,
+      "p99": 1824.5452908337836
+     },
+     "buckets": {
+      "<-50%": 0,
+      "-50..-25%": 39302,
+      "-25..-10%": 16236,
+      "-10..0%": 3844,
+      "no change": 0,
+      "0..+25%": 1507,
+      "+25..+100%": 7866,
+      "+100..+500%": 54105,
+      "+500..+2000%": 31970,
+      ">+2000%": 411
+     }
+    }
+   },
+   "byCostBucket": [
+    [
+     "<10k",
+     {
+      "n": 59379,
+      "pctMore": 0,
+      "pctLess": 100,
+      "pctSame": 0,
+      "more": 0,
+      "less": 59379,
+      "same": 0,
+      "avgTodayFee": 8399.82345610401,
+      "avgNewFee": 6547.0390542110845,
+      "totalTodayFee": 498773117,
+      "totalNewFee": 388756632,
+      "totalTodayBurn": 148447500,
+      "totalNewBurn": 38431015,
+      "leaderToday": 350325617,
+      "leaderNew": 350325617,
+      "p": {
+       "p1": -41.699999999999996,
+       "p5": -39.519999999999996,
+       "p25": -38.824470211915234,
+       "p50": -34.04753933712755,
+       "p75": -23.312955560780626,
+       "p95": -4.324137931034483,
+       "p99": -4.324137931034483
+      },
+      "buckets": {
+       "<-50%": 0,
+       "-50..-25%": 39302,
+       "-25..-10%": 16235,
+       "-10..0%": 3842,
+       "no change": 0,
+       "0..+25%": 0,
+       "+25..+100%": 0,
+       "+100..+500%": 0,
+       "+500..+2000%": 0,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     "10-25k",
+     {
+      "n": 200489,
+      "pctMore": 98.95505489079201,
+      "pctLess": 1.0449451092079864,
+      "pctSame": 0,
+      "more": 198394,
+      "less": 2095,
+      "same": 0,
+      "avgTodayFee": 7947.380075714877,
+      "avgNewFee": 10546.726229369193,
+      "totalTodayFee": 1593362284,
+      "totalNewFee": 2114502595,
+      "totalTodayBurn": 506522500,
+      "totalNewBurn": 1032962811,
+      "leaderToday": 1086839784,
+      "leaderNew": 1081539784,
+      "p": {
+       "p1": -13.170000000000002,
+       "p5": 40.38390550018457,
+       "p25": 53.72,
+       "p50": 53.72,
+       "p75": 53.72,
+       "p95": 53.72,
+       "p99": 53.72
+      },
+      "buckets": {
+       "<-50%": 2,
+       "-50..-25%": 369,
+       "-25..-10%": 1704,
+       "-10..0%": 20,
+       "no change": 0,
+       "0..+25%": 1661,
+       "+25..+100%": 196733,
+       "+100..+500%": 0,
+       "+500..+2000%": 0,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     "25-50k",
+     {
+      "n": 16620,
+      "pctMore": 96.96750902527076,
+      "pctLess": 3.032490974729242,
+      "pctSame": 0,
+      "more": 16116,
+      "less": 504,
+      "same": 0,
+      "avgTodayFee": 6470.453429602888,
+      "avgNewFee": 13189.033393501804,
+      "totalTodayFee": 107538936,
+      "totalNewFee": 219201735,
+      "totalTodayBurn": 46810000,
+      "totalNewBurn": 163732799,
+      "leaderToday": 60728936,
+      "leaderNew": 55468936,
+      "p": {
+       "p1": -5.667166416791604,
+       "p5": 21.847815218478154,
+       "p25": 105.55222688236469,
+       "p50": 169.29842094743154,
+       "p75": 169.29842094743154,
+       "p95": 177.88679245283018,
+       "p99": 177.88679245283018
+      },
+      "buckets": {
+       "<-50%": 4,
+       "-50..-25%": 70,
+       "-25..-10%": 6,
+       "-10..0%": 424,
+       "no change": 0,
+       "0..+25%": 1130,
+       "+25..+100%": 2153,
+       "+100..+500%": 12833,
+       "+500..+2000%": 0,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     "50-100k",
+     {
+      "n": 48121,
+      "pctMore": 99.93350096631409,
+      "pctLess": 0.06649903368591675,
+      "pctSame": 0,
+      "more": 48089,
+      "less": 32,
+      "same": 0,
+      "avgTodayFee": 18583.262276345045,
+      "avgNewFee": 36762.79192036741,
+      "totalTodayFee": 894245164,
+      "totalNewFee": 1769062310,
+      "totalTodayBurn": 126220000,
+      "totalNewBurn": 1006954646,
+      "leaderToday": 768025164,
+      "leaderNew": 762107664,
+      "p": {
+       "p1": 13.564516129032258,
+       "p5": 28.34715804709681,
+       "p25": 199.66709096249878,
+       "p50": 322.21345433024266,
+       "p75": 355.1916932907348,
+       "p95": 401.7910447761194,
+       "p99": 437.3453760062831
+      },
+      "buckets": {
+       "<-50%": 13,
+       "-50..-25%": 14,
+       "-25..-10%": 0,
+       "-10..0%": 5,
+       "no change": 0,
+       "0..+25%": 1833,
+       "+25..+100%": 6850,
+       "+100..+500%": 39406,
+       "+500..+2000%": 0,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     "100-250k",
+     {
+      "n": 54817,
+      "pctMore": 100,
+      "pctLess": 0,
+      "pctSame": 0,
+      "more": 54817,
+      "less": 0,
+      "same": 0,
+      "avgTodayFee": 55366.01537844099,
+      "avgNewFee": 93655.85234507543,
+      "totalTodayFee": 3034998865,
+      "totalNewFee": 5133932858,
+      "totalTodayBurn": 144802500,
+      "totalNewBurn": 2251496493,
+      "leaderToday": 2890196365,
+      "leaderNew": 2882436365,
+      "p": {
+       "p1": 6.277685950413223,
+       "p5": 33.35096871131239,
+       "p25": 266.11191358412356,
+       "p50": 424.39926062846587,
+       "p75": 665.6233037814366,
+       "p95": 1040.04,
+       "p99": 1079
+      },
+      "buckets": {
+       "<-50%": 0,
+       "-50..-25%": 0,
+       "-25..-10%": 0,
+       "-10..0%": 0,
+       "no change": 0,
+       "0..+25%": 2284,
+       "+25..+100%": 4028,
+       "+100..+500%": 26248,
+       "+500..+2000%": 22257,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     "250-500k",
+     {
+      "n": 66176,
+      "pctMore": 100,
+      "pctLess": 0,
+      "pctSame": 0,
+      "more": 66176,
+      "less": 0,
+      "same": 0,
+      "avgTodayFee": 47659.49209683269,
+      "avgNewFee": 131884.0997793762,
+      "totalTodayFee": 3153914549,
+      "totalNewFee": 8727562187,
+      "totalTodayBurn": 173292500,
+      "totalNewBurn": 5754792638,
+      "leaderToday": 2980622049,
+      "leaderNew": 2972769549,
+      "p": {
+       "p1": 7.7669651741293535,
+       "p5": 74.05619047619048,
+       "p25": 597.812860993454,
+       "p50": 1390.58574239443,
+       "p75": 1552.1599999999999,
+       "p95": 1973.7226277372263,
+       "p99": 2056.56
+      },
+      "buckets": {
+       "<-50%": 0,
+       "-50..-25%": 0,
+       "-25..-10%": 0,
+       "-10..0%": 0,
+       "no change": 0,
+       "0..+25%": 1595,
+       "+25..+100%": 3804,
+       "+100..+500%": 9880,
+       "+500..+2000%": 48440,
+       ">+2000%": 2457
+      }
+     }
+    ],
+    [
+     ">500k",
+     {
+      "n": 22020,
+      "pctMore": 100,
+      "pctLess": 0,
+      "pctSame": 0,
+      "more": 22020,
+      "less": 0,
+      "same": 0,
+      "avgTodayFee": 37600.16934604905,
+      "avgNewFee": 248509.81503178927,
+      "totalTodayFee": 827955729,
+      "totalNewFee": 5472186127,
+      "totalTodayBurn": 73837500,
+      "totalNewBurn": 4736855398,
+      "leaderToday": 754118229,
+      "leaderNew": 735330729,
+      "p": {
+       "p1": 28.78292682926829,
+       "p5": 224.3961056047715,
+       "p25": 1548.1580352375868,
+       "p50": 3214.37425029988,
+       "p75": 4065.58,
+       "p95": 7032.369365775829,
+       "p99": 7053.6
+      },
+      "buckets": {
+       "<-50%": 0,
+       "-50..-25%": 0,
+       "-25..-10%": 0,
+       "-10..0%": 0,
+       "no change": 0,
+       "0..+25%": 184,
+       "+25..+100%": 450,
+       "+100..+500%": 900,
+       "+500..+2000%": 4579,
+       ">+2000%": 15907
+      }
+     }
+    ]
+   ],
+   "burn": {
+    "todayPerDaySol": 1013.4823846153845,
+    "newPerDaySol": 12449.26451076923,
+    "multiple": 12.283651595477618,
+    "optimizedPerDaySol": 3165.468570276923,
+    "voteMigratedPerDaySol": 19874.87491846154
+   },
+   "leader": {
+    "todayPerDaySol": 7386.249719630769,
+    "newPerDaySol": 7343.982258092307,
+    "changePct": -0.5722452278607018
+   }
+  },
+  "g1_2": {
+   "label": "1/2",
+   "all": {
+    "n": 467622,
+    "pctMore": 87.62547527704,
+    "pctLess": 12.374524722959999,
+    "pctSame": 0,
+    "more": 409756,
+    "less": 57866,
+    "same": 0,
+    "avgTodayFee": 21621.71293052936,
+    "avgNewFee": 82994.62807352947,
+    "totalTodayFee": 10110788644,
+    "totalNewFee": 38810113969,
+    "totalTodayBurn": 1219932500,
+    "totalNewBurn": 29970135325,
+    "leaderToday": 8890856144,
+    "leaderNew": 8839978644,
+    "p": {
+     "p1": -29.876977152899826,
+     "p5": -27.551223393674157,
+     "p25": 157.42000000000002,
+     "p50": 157.42000000000002,
+     "p75": 757.7029156816391,
+     "p95": 3534.1488989863683,
+     "p99": 9248.42219804135
+    },
+    "buckets": {
+     "<-50%": 2,
+     "-50..-25%": 29390,
+     "-25..-10%": 18195,
+     "-10..0%": 10279,
+     "no change": 0,
+     "0..+25%": 5003,
+     "+25..+100%": 13574,
+     "+100..+500%": 237367,
+     "+500..+2000%": 84847,
+     ">+2000%": 68965
+    }
+   },
+   "vote": {
+    "n": 181487,
+    "pctMore": 100,
+    "pctLess": 0,
+    "pctSame": 0,
+    "more": 181487,
+    "less": 0,
+    "same": 0,
+    "avgTodayFee": 5035.897888002997,
+    "avgNewFee": 12873.575914528314,
+    "totalTodayFee": 913950000,
+    "totalNewFee": 2336386672,
+    "totalTodayBurn": 456975000,
+    "totalNewBurn": 1882669172,
+    "leaderToday": 456975000,
+    "leaderNew": 453717500,
+    "p": {
+     "p1": 157.4,
+     "p5": 157.42000000000002,
+     "p25": 157.42000000000002,
+     "p50": 157.42000000000002,
+     "p75": 157.42000000000002,
+     "p95": 157.42000000000002,
+     "p99": 157.42000000000002
+    },
+    "buckets": {
+     "<-50%": 0,
+     "-50..-25%": 0,
+     "-25..-10%": 0,
+     "-10..0%": 0,
+     "no change": 0,
+     "0..+25%": 0,
+     "+25..+100%": 1303,
+     "+100..+500%": 180184,
+     "+500..+2000%": 0,
+     ">+2000%": 0
+    }
+   },
+   "nonVote": {
+    "n": 286135,
+    "pctMore": 79.7766788404075,
+    "pctLess": 20.2233211595925,
+    "pctSame": 0,
+    "more": 228269,
+    "less": 57866,
+    "same": 0,
+    "avgTodayFee": 32141.60673807818,
+    "avgNewFee": 127470.3454558163,
+    "totalTodayFee": 9196838644,
+    "totalNewFee": 36473727297,
+    "totalTodayBurn": 762957500,
+    "totalNewBurn": 28087466153,
+    "leaderToday": 8433881144,
+    "leaderNew": 8386261144,
+    "p": {
+     "p1": -30.35112080936322,
+     "p5": -27.98,
+     "p25": 79.19809523809523,
+     "p50": 628.8858321870702,
+     "p75": 1828.6200000000001,
+     "p95": 5455.305063517624,
+     "p99": 10026.851485148514
+    },
+    "buckets": {
+     "<-50%": 2,
+     "-50..-25%": 29390,
+     "-25..-10%": 18195,
+     "-10..0%": 10279,
+     "no change": 0,
+     "0..+25%": 5003,
+     "+25..+100%": 12271,
+     "+100..+500%": 57183,
+     "+500..+2000%": 84847,
+     ">+2000%": 68965
+    }
+   },
+   "optimized": {
+    "n": 467622,
+    "pctMore": 42.500780544970084,
+    "pctLess": 57.499219455029916,
+    "pctSame": 0,
+    "more": 198743,
+    "less": 268879,
+    "same": 0,
+    "avgTodayFee": 21621.71293052936,
+    "avgNewFee": 35200.24691096655,
+    "totalTodayFee": 10110788644,
+    "totalNewFee": 16460409861,
+    "totalTodayBurn": 1219932500,
+    "totalNewBurn": 7620431217,
+    "leaderToday": 8890856144,
+    "leaderNew": 8839978644,
+    "p": {
+     "p1": -35.04,
+     "p5": -29.90566037735849,
+     "p25": -13.239999999999998,
+     "p50": -13.239999999999998,
+     "p75": 88.13257305773344,
+     "p95": 1058.76,
+     "p99": 1835.3018127452813
+    },
+    "buckets": {
+     "<-50%": 3988,
+     "-50..-25%": 41961,
+     "-25..-10%": 212609,
+     "-10..0%": 10321,
+     "no change": 0,
+     "0..+25%": 22260,
+     "+25..+100%": 61850,
+     "+100..+500%": 57282,
+     "+500..+2000%": 53901,
+     ">+2000%": 3450
+    }
+   },
+   "voteMigratedScenario": {
+    "n": 467622,
+    "pctMore": 87.62547527704,
+    "pctLess": 12.374524722959999,
+    "pctSame": 0,
+    "more": 409756,
+    "less": 57866,
+    "same": 0,
+    "avgTodayFee": 21621.71293052936,
+    "avgNewFee": 121223.08930931393,
+    "totalTodayFee": 10110788644,
+    "totalNewFee": 56686583469,
+    "totalTodayBurn": 1219932500,
+    "totalNewBurn": 47846604825,
+    "leaderToday": 8890856144,
+    "leaderNew": 8839978644,
+    "p": {
+     "p1": -29.876977152899826,
+     "p5": -27.551223393674157,
+     "p25": 367.12744949111345,
+     "p50": 2127.42,
+     "p75": 2127.42,
+     "p95": 3534.1488989863683,
+     "p99": 9248.42219804135
+    },
+    "buckets": {
+     "<-50%": 2,
+     "-50..-25%": 29390,
+     "-25..-10%": 18195,
+     "-10..0%": 10279,
+     "no change": 0,
+     "0..+25%": 5003,
+     "+25..+100%": 12271,
+     "+100..+500%": 57183,
+     "+500..+2000%": 86150,
+     ">+2000%": 249149
+    }
+   },
+   "byPattern": {
+    "neither": {
+     "n": 202155,
+     "pctMore": 99.99307462095916,
+     "pctLess": 0.006925379040835003,
+     "pctSame": 0,
+     "more": 202141,
+     "less": 14,
+     "same": 0,
+     "avgTodayFee": 5428.310192673938,
+     "avgNewFee": 43619.49864707774,
+     "totalTodayFee": 1097360047,
+     "totalNewFee": 8817899749,
+     "totalTodayBurn": 526585000,
+     "totalNewBurn": 8268322202,
+     "leaderToday": 570775047,
+     "leaderNew": 549577547,
+     "p": {
+      "p1": 116.9375,
+      "p5": 157.42000000000002,
+      "p25": 157.42000000000002,
+      "p50": 157.42000000000002,
+      "p75": 157.42000000000002,
+      "p95": 4130.18,
+      "p99": 9248.42219804135
+     },
+     "buckets": {
+      "<-50%": 0,
+      "-50..-25%": 13,
+      "-25..-10%": 0,
+      "-10..0%": 1,
+      "no change": 0,
+      "0..+25%": 59,
+      "+25..+100%": 1835,
+      "+100..+500%": 182549,
+      "+500..+2000%": 1345,
+      ">+2000%": 16353
+     }
+    },
+    "cuOnly": {
+     "n": 110226,
+     "pctMore": 99.96915428301853,
+     "pctLess": 0.030845716981474425,
+     "pctSame": 0,
+     "more": 110192,
+     "less": 34,
+     "same": 0,
+     "avgTodayFee": 60015.63919583402,
+     "avgNewFee": 172408.3746393773,
+     "totalTodayFee": 6615283846,
+     "totalNewFee": 19003885503,
+     "totalTodayBurn": 305205000,
+     "totalNewBurn": 12723446657,
+     "leaderToday": 6310078846,
+     "leaderNew": 6280438846,
+     "p": {
+      "p1": 8.301849025445993,
+      "p5": 44.46542199846164,
+      "p25": 157.80671006509766,
+      "p50": 724.953560371517,
+      "p75": 2282.414197711939,
+      "p95": 5133.92,
+      "p99": 10029.821782178218
+     },
+     "buckets": {
+      "<-50%": 2,
+      "-50..-25%": 4,
+      "-25..-10%": 14,
+      "-10..0%": 14,
+      "no change": 0,
+      "0..+25%": 3331,
+      "+25..+100%": 7038,
+      "+100..+500%": 38470,
+      "+500..+2000%": 31464,
+      ">+2000%": 29889
+     }
+    },
+    "loadedOnly": {
+     "n": 0,
+     "pctMore": 0,
+     "pctLess": 0,
+     "pctSame": 0,
+     "more": 0,
+     "less": 0,
+     "same": 0,
+     "avgTodayFee": 0,
+     "avgNewFee": 0,
+     "totalTodayFee": 0,
+     "totalNewFee": 0,
+     "totalTodayBurn": 0,
+     "totalNewBurn": 0,
+     "leaderToday": 0,
+     "leaderNew": 0,
+     "p": {
+      "p1": 0,
+      "p5": 0,
+      "p25": 0,
+      "p50": 0,
+      "p75": 0,
+      "p95": 0,
+      "p99": 0
+     },
+     "buckets": {
+      "<-50%": 0,
+      "-50..-25%": 0,
+      "-25..-10%": 0,
+      "-10..0%": 0,
+      "no change": 0,
+      "0..+25%": 0,
+      "+25..+100%": 0,
+      "+100..+500%": 0,
+      "+500..+2000%": 0,
+      ">+2000%": 0
+     }
+    },
+    "both": {
+     "n": 155241,
+     "pctMore": 62.75597297105791,
+     "pctLess": 37.24402702894209,
+     "pctSame": 0,
+     "more": 97423,
+     "less": 57818,
+     "same": 0,
+     "avgTodayFee": 15447.882653422743,
+     "avgNewFee": 70782.38813844281,
+     "totalTodayFee": 2398144751,
+     "totalNewFee": 10988328717,
+     "totalTodayBurn": 388142500,
+     "totalNewBurn": 8978366466,
+     "leaderToday": 2010002251,
+     "leaderNew": 2009962251,
+     "p": {
+      "p1": -30.448901623686726,
+      "p5": -29.525279814743342,
+      "p25": -17.24300164667137,
+      "p50": 377.1381031613977,
+      "p75": 861.2972202423379,
+      "p95": 3157.86,
+      "p99": 3697.9399999999996
+     },
+     "buckets": {
+      "<-50%": 0,
+      "-50..-25%": 29373,
+      "-25..-10%": 18181,
+      "-10..0%": 10264,
+      "no change": 0,
+      "0..+25%": 1613,
+      "+25..+100%": 4701,
+      "+100..+500%": 16348,
+      "+500..+2000%": 52038,
+      ">+2000%": 22723
+     }
+    }
+   },
+   "byCostBucket": [
+    [
+     "<10k",
+     {
+      "n": 59379,
+      "pctMore": 2.628875528385456,
+      "pctLess": 97.37112447161455,
+      "pctSame": 0,
+      "more": 1561,
+      "less": 57818,
+      "same": 0,
+      "avgTodayFee": 8399.82345610401,
+      "avgNewFee": 7193.94477845703,
+      "totalTodayFee": 498773117,
+      "totalNewFee": 427169247,
+      "totalTodayBurn": 148447500,
+      "totalNewBurn": 76843630,
+      "leaderToday": 350325617,
+      "leaderNew": 350325617,
+      "p": {
+       "p1": -33.4,
+       "p5": -30.35112080936322,
+       "p25": -27.98,
+       "p50": -24.36693741041567,
+       "p75": -15.536842105263156,
+       "p95": -0.027586206896551724,
+       "p99": 13.425094753640535
+      },
+      "buckets": {
+       "<-50%": 0,
+       "-50..-25%": 29373,
+       "-25..-10%": 18181,
+       "-10..0%": 10264,
+       "no change": 0,
+       "0..+25%": 1355,
+       "+25..+100%": 206,
+       "+100..+500%": 0,
+       "+500..+2000%": 0,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     "10-25k",
+     {
+      "n": 200489,
+      "pctMore": 99.99152073181072,
+      "pctLess": 0.008479268189277217,
+      "pctSame": 0,
+      "more": 200472,
+      "less": 17,
+      "same": 0,
+      "avgTodayFee": 7947.380075714877,
+      "avgNewFee": 15697.98592940261,
+      "totalTodayFee": 1593362284,
+      "totalNewFee": 3147273501,
+      "totalTodayBurn": 506522500,
+      "totalNewBurn": 2065733717,
+      "leaderToday": 1086839784,
+      "leaderNew": 1081539784,
+      "p": {
+       "p1": 32.31,
+       "p5": 128.89376996805112,
+       "p25": 157.42000000000002,
+       "p50": 157.42000000000002,
+       "p75": 157.42000000000002,
+       "p95": 157.42000000000002,
+       "p99": 157.42000000000002
+      },
+      "buckets": {
+       "<-50%": 2,
+       "-50..-25%": 0,
+       "-25..-10%": 2,
+       "-10..0%": 13,
+       "no change": 0,
+       "0..+25%": 1108,
+       "+25..+100%": 3747,
+       "+100..+500%": 195617,
+       "+500..+2000%": 0,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     "25-50k",
+     {
+      "n": 16620,
+      "pctMore": 99.90974729241877,
+      "pctLess": 0.09025270758122744,
+      "pctSame": 0,
+      "more": 16605,
+      "less": 15,
+      "same": 0,
+      "avgTodayFee": 6470.453429602888,
+      "avgNewFee": 23039.718712394704,
+      "totalTodayFee": 107538936,
+      "totalNewFee": 382920125,
+      "totalTodayBurn": 46810000,
+      "totalNewBurn": 327451189,
+      "leaderToday": 60728936,
+      "leaderNew": 55468936,
+      "p": {
+       "p1": 36.18048780487805,
+       "p5": 94.46303111408498,
+       "p25": 260.96246006389777,
+       "p50": 388.38696781930844,
+       "p75": 388.54687187687387,
+       "p95": 402.9245283018868,
+       "p99": 403.9
+      },
+      "buckets": {
+       "<-50%": 0,
+       "-50..-25%": 4,
+       "-25..-10%": 9,
+       "-10..0%": 2,
+       "no change": 0,
+       "0..+25%": 102,
+       "+25..+100%": 785,
+       "+100..+500%": 15718,
+       "+500..+2000%": 0,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     "50-100k",
+     {
+      "n": 48121,
+      "pctMore": 99.96675048315704,
+      "pctLess": 0.033249516842958377,
+      "pctSame": 0,
+      "more": 48105,
+      "less": 16,
+      "same": 0,
+      "avgTodayFee": 18583.262276345045,
+      "avgNewFee": 57687.75490949897,
+      "totalTodayFee": 894245164,
+      "totalNewFee": 2775992454,
+      "totalTodayBurn": 126220000,
+      "totalNewBurn": 2013884790,
+      "leaderToday": 768025164,
+      "leaderNew": 762107664,
+      "p": {
+       "p1": 29.048387096774192,
+       "p5": 65.39382195372164,
+       "p25": 429.1030160595378,
+       "p50": 690.3414277889356,
+       "p75": 756.9542947202522,
+       "p95": 852.3781902552205,
+       "p99": 923.7580993520519
+      },
+      "buckets": {
+       "<-50%": 0,
+       "-50..-25%": 13,
+       "-25..-10%": 3,
+       "-10..0%": 0,
+       "no change": 0,
+       "0..+25%": 337,
+       "+25..+100%": 4489,
+       "+100..+500%": 8159,
+       "+500..+2000%": 35120,
+       ">+2000%": 0
+      }
+     }
+    ],
+    [
+     "100-250k",
+     {
+      "n": 54817,
+      "pctMore": 100,
+      "pctLess": 0,
+      "pctSame": 0,
+      "more": 54817,
+      "less": 0,
+      "same": 0,
+      "avgTodayFee": 55366.01537844099,
+      "avgNewFee": 134728.34766587007,
+      "totalTodayFee": 3034998865,
+      "totalNewFee": 7385403834,
+      "totalTodayBurn": 144802500,
+      "totalNewBurn": 4502967469,
+      "leaderToday": 2890196365,
+      "leaderNew": 2882436365,
+      "p": {
+       "p1": 13.123113931799269,
+       "p5": 70.71035226246322,
+       "p25": 556.3866666666667,
+       "p50": 889.5486935866984,
+       "p75": 1373.7333333333333,
+       "p95": 2130.08,
+       "p99": 2206.428021555042
+      },
+      "buckets": {
+       "<-50%": 0,
+       "-50..-25%": 0,
+       "-25..-10%": 0,
+       "-10..0%": 0,
+       "no change": 0,
+       "0..+25%": 1159,
+       "+25..+100%": 2450,
+       "+100..+500%": 8885,
+       "+500..+2000%": 36820,
+       ">+2000%": 5503
+      }
+     }
+    ],
+    [
+     "250-500k",
+     {
+      "n": 66176,
+      "pctMore": 100,
+      "pctLess": 0,
+      "pctSame": 0,
+      "more": 66176,
+      "less": 0,
+      "same": 0,
+      "avgTodayFee": 47659.49209683269,
+      "avgNewFee": 218845.55347860252,
+      "totalTodayFee": 3153914549,
+      "totalNewFee": 14482323347,
+      "totalTodayBurn": 173292500,
+      "totalNewBurn": 11509553798,
+      "leaderToday": 2980622049,
+      "leaderNew": 2972769549,
+      "p": {
+       "p1": 15.782587064676617,
+       "p5": 150.4933333333333,
+       "p25": 1215.460246187195,
+       "p50": 2826.8538210690485,
+       "p75": 3154.16,
+       "p95": 3995.4667691125624,
+       "p99": 4163.1
+      },
+      "buckets": {
+       "<-50%": 0,
+       "-50..-25%": 0,
+       "-25..-10%": 0,
+       "-10..0%": 0,
+       "no change": 0,
+       "0..+25%": 853,
+       "+25..+100%": 1527,
+       "+100..+500%": 8186,
+       "+500..+2000%": 11757,
+       ">+2000%": 43853
+      }
+     }
+    ],
+    [
+     ">500k",
+     {
+      "n": 22020,
+      "pctMore": 100,
+      "pctLess": 0,
+      "pctSame": 0,
+      "more": 22020,
+      "less": 0,
+      "same": 0,
+      "avgTodayFee": 37600.16934604905,
+      "avgNewFee": 463625.4069482289,
+      "totalTodayFee": 827955729,
+      "totalNewFee": 10209031461,
+      "totalTodayBurn": 73837500,
+      "totalNewBurn": 9473700732,
+      "leaderToday": 754118229,
+      "leaderNew": 735330729,
+      "p": {
+       "p1": 58.25092405328126,
+       "p5": 454.3243209459882,
+       "p25": 3115.376401494928,
+       "p50": 6478.7285085965605,
+       "p75": 8181.14,
+       "p95": 14114.579178300759,
+       "p99": 14157.2
+      },
+      "buckets": {
+       "<-50%": 0,
+       "-50..-25%": 0,
+       "-25..-10%": 0,
+       "-10..0%": 0,
+       "no change": 0,
+       "0..+25%": 89,
+       "+25..+100%": 370,
+       "+100..+500%": 802,
+       "+500..+2000%": 1150,
+       ">+2000%": 19609
+      }
+     }
+    ]
+   ],
+   "burn": {
+    "todayPerDaySol": 1013.4823846153845,
+    "newPerDaySol": 24898.26627,
+    "multiple": 24.56704393480787,
+    "optimizedPerDaySol": 6330.819780276923,
+    "voteMigratedPerDaySol": 39749.48708538461
+   },
+   "leader": {
+    "todayPerDaySol": 7386.249719630769,
+    "newPerDaySol": 7343.982258092307,
+    "changePct": -0.5722452278607018
+   }
+  }
+ },
+ "programs": {
+  "g1_10": [
+   {
+    "id": "Vote111111111111111111111111111111111111111",
+    "label": "Vote",
+    "n": 181487,
+    "share": 38.810620543943614,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 5035.897888002997,
+    "avgNewFee": 4575.508267809815,
+    "medianChangePct": -8.5
+   },
+   {
+    "id": "11111111111111111111111111111111",
+    "label": "System",
+    "n": 62901,
+    "share": 13.451249085800068,
+    "pctMore": 86.74265909921941,
+    "pctLess": 13.257340900780592,
+    "avgTodayFee": 53696.71011589641,
+    "avgNewFee": 66039.76299263923,
+    "medianChangePct": 100.51880674448768
+   },
+   {
+    "id": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    "label": "SPL Token",
+    "n": 32041,
+    "share": 6.851901749703821,
+    "pctMore": 98.2647233232421,
+    "pctLess": 1.735276676757904,
+    "avgTodayFee": 40987.78199806498,
+    "avgNewFee": 88155.78224774508,
+    "medianChangePct": 589.64
+   },
+   {
+    "id": "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih",
+    "label": null,
+    "n": 21843,
+    "share": 4.671080488086531,
+    "pctMore": 63.187291123014234,
+    "pctLess": 36.81270887698576,
+    "avgTodayFee": 8112.22886050451,
+    "avgNewFee": 16305.879503731172,
+    "medianChangePct": 12.312612432540476
+   },
+   {
+    "id": "9H6tua7jkLhdm3w8BvgpTn5LZNU7g4ZynDmCiNN3q6Rp",
+    "label": null,
+    "n": 12917,
+    "share": 2.762273802344629,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 8770.56514670589,
+    "avgNewFee": 6464.5651467058915,
+    "medianChangePct": -43.63292336802271
+   },
+   {
+    "id": "fastC7gqs2WUXgcyNna2BZAe9mte4zcTGprv3mv18N3",
+    "label": null,
+    "n": 12007,
+    "share": 2.5676721796664825,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 9179.187723827767,
+    "avgNewFee": 6959.648455067877,
+    "medianChangePct": -26.756126021003503
+   },
+   {
+    "id": "2VSNUquk7FqkbS27WJpm6J1175EhoLcGtxuExu3wrzVz",
+    "label": null,
+    "n": 8627,
+    "share": 1.8448661525762262,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 11390.183957343224,
+    "avgNewFee": 40981.129477222676,
+    "medianChangePct": 542.3041811210517
+   },
+   {
+    "id": "TessVdML9pBGgG9yGks7o4HewRaXVAMuoVj4x83GLQH",
+    "label": null,
+    "n": 8550,
+    "share": 1.8283998614265367,
+    "pctMore": 0.03508771929824561,
+    "pctLess": 99.96491228070175,
+    "avgTodayFee": 5953.9045614035085,
+    "avgNewFee": 4029.6835087719296,
+    "medianChangePct": -45.47633313361294
+   },
+   {
+    "id": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+    "label": "Jupiter v6",
+    "n": 8266,
+    "share": 1.7676670473159943,
+    "pctMore": 99.81853375272199,
+    "pctLess": 0.18146624727800628,
+    "avgTodayFee": 20993.251754173725,
+    "avgNewFee": 42750.23614807646,
+    "medianChangePct": 215.55136663524976
+   },
+   {
+    "id": "DhpyNWkdxFh3DRPsBrwRwrK3TYC5t7Q4arnSvf3t84HY",
+    "label": null,
+    "n": 6547,
+    "share": 1.4000624435976066,
+    "pctMore": 99.46540400183291,
+    "pctLess": 0.5345959981670995,
+    "avgTodayFee": 7582.576599969451,
+    "avgNewFee": 15149.39346265465,
+    "medianChangePct": 125.91396021084849
+   },
+   {
+    "id": "3bqo2w922U8RsHx86LZSoNR2gUJE5HGNYB7BU66RnGjK",
+    "label": null,
+    "n": 5224,
+    "share": 1.1171416229347635,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 12286.300727411945,
+    "avgNewFee": 18938.8413093415,
+    "medianChangePct": 103.46848273677543
+   },
+   {
+    "id": "NA247a7YE9S3p9CdKmMyETx8TTwbSdVbVYHHxpnHTUV",
+    "label": null,
+    "n": 5156,
+    "share": 1.102599963218155,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 10165.245539177657,
+    "avgNewFee": 48185.00969743988,
+    "medianChangePct": 613.5752470435768
+   },
+   {
+    "id": "Prism8hsRo6Ww5jiN5Zeh3YDPLZHqHduCPSAV7JF7qv",
+    "label": null,
+    "n": 5112,
+    "share": 1.093190653989761,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 13835.579225352112,
+    "avgNewFee": 47704.23356807512,
+    "medianChangePct": 528.1278538812785
+   },
+   {
+    "id": "W1LDCARDa67SPBG7TFpQivHnEZXRtxCFP13ysEd1bWR",
+    "label": null,
+    "n": 4922,
+    "share": 1.0525595459580601,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 5343.511580658269,
+    "avgNewFee": 3199.697480698903,
+    "medianChangePct": -43.43264005995878
+   },
+   {
+    "id": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+    "label": "pump.fun",
+    "n": 4383,
+    "share": 0.9372955079102352,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 189500.90440337668,
+    "avgNewFee": 198072.3365274926,
+    "medianChangePct": 103.31469648562299
+   },
+   {
+    "id": "5kZmvKbaqNjSNEnQKEREEKu5r9JkaDRKrQMUvZagCMoz",
+    "label": null,
+    "n": 4087,
+    "share": 0.8739965185555855,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 8473.195497920235,
+    "avgNewFee": 16160.233178370443,
+    "medianChangePct": 136.63578047042054
+   },
+   {
+    "id": "2DNbzPochEcyCcWMbL4d9S3u9QqQEj5bbe6cSZFvKsbh",
+    "label": null,
+    "n": 3742,
+    "share": 0.8002189802874972,
+    "pctMore": 2.939604489577766,
+    "pctLess": 97.06039551042224,
+    "avgTodayFee": 5000,
+    "avgNewFee": 3355.28674505612,
+    "medianChangePct": -45.58
+   },
+   {
+    "id": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+    "label": "Memo",
+    "n": 3630,
+    "share": 0.7762680113424946,
+    "pctMore": 72.34159779614325,
+    "pctLess": 27.658402203856745,
+    "avgTodayFee": 30011.502479338844,
+    "avgNewFee": 44983.84077134986,
+    "medianChangePct": 99.3137401163658
+   },
+   {
+    "id": "FsU1rcaEC361jBr9JE5wm7bpWRSTYeAMN4R2MCs11rNF",
+    "label": null,
+    "n": 3457,
+    "share": 0.739272318239946,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 5323.291582296789,
+    "avgNewFee": 38326.924211744285,
+    "medianChangePct": 631.858407079646
+   },
+   {
+    "id": "6FCD55UeSe9kE5nfXZB3pwNqwRcD5S9ZdU43G529eGra",
+    "label": null,
+    "n": 3237,
+    "share": 0.6922257720979765,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 12118.020698177324,
+    "avgNewFee": 18752.0500463392,
+    "medianChangePct": 102.90858725761774
+   },
+   {
+    "id": "Hd7c1kYHqYJ7dD1bLf9C61XC22JgbGp4P1PQ8UNcUH5w",
+    "label": null,
+    "n": 2993,
+    "share": 0.6400468754677924,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 6209.141329769462,
+    "avgNewFee": 22753.05579685934,
+    "medianChangePct": 235.39772727272728
+   },
+   {
+    "id": "BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi",
+    "label": null,
+    "n": 2829,
+    "share": 0.6049758137983242,
+    "pctMore": 8.16542948038176,
+    "pctLess": 91.83457051961824,
+    "avgTodayFee": 10399.62460233298,
+    "avgNewFee": 10257.229409685402,
+    "medianChangePct": -21.741207951070336
+   },
+   {
+    "id": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+    "label": "Token-2022",
+    "n": 2663,
+    "share": 0.5694770562548382,
+    "pctMore": 93.39091250469396,
+    "pctLess": 6.609087495306046,
+    "avgTodayFee": 19322.533984228314,
+    "avgNewFee": 56559.88283890349,
+    "medianChangePct": 267.37614678899087
+   },
+   {
+    "id": "ojh19ojaKduoJZuaJADhcVGp4xt1TcdAvZmpVsCorch",
+    "label": null,
+    "n": 2328,
+    "share": 0.4978379973568395,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 8589.57001718213,
+    "avgNewFee": 6319.278780068728,
+    "medianChangePct": -37.35259923600731
+   },
+   {
+    "id": "dijkbkCAKfFTCxQg3u1pg82gVU1jJGHBBRcteD11mBu",
+    "label": null,
+    "n": 2263,
+    "share": 0.48393788145125766,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 5001.021652673442,
+    "avgNewFee": 2732.750773309766,
+    "medianChangePct": -45.45090981803639
+   },
+   {
+    "id": "QuaNtZsgYRe5Z9Bk4LZ4cTD9tbkVoyCNf1R2BN9bBDv",
+    "label": null,
+    "n": 2118,
+    "share": 0.4529299305849596,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 6784.408404154863,
+    "avgNewFee": 6145.075542965062,
+    "medianChangePct": -10.745762711864407
+   },
+   {
+    "id": "6MWVTis8rmmk6Vt9zmAJJbmb3VuLpzoQ1aHH4N6wQEGh",
+    "label": null,
+    "n": 2019,
+    "share": 0.43175898482107344,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 32411.184249628528,
+    "avgNewFee": 61182.29816740961,
+    "medianChangePct": 148.4039287906691
+   },
+   {
+    "id": "B72M6nyCLFgWiJtAN4naUTminMiTmyGcEqQHXwVeRdht",
+    "label": null,
+    "n": 1777,
+    "share": 0.38000778406490715,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 5767.075407990996,
+    "avgNewFee": 4245.6854248733825,
+    "medianChangePct": -35.05399963390079
+   },
+   {
+    "id": "4Qv3mbzcq1bKmrhGG4voS3EemfPd7f838FLUU7wBHSyi",
+    "label": null,
+    "n": 1682,
+    "share": 0.3596922300490567,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 43088.28061831153,
+    "avgNewFee": 81521.2033293698,
+    "medianChangePct": 212.6958891664774
+   },
+   {
+    "id": "BYdq7NJXWHnTzzCogT6VByrPXvUQwkD5PuZQLS8JvZtw",
+    "label": null,
+    "n": 1666,
+    "share": 0.35627066305691346,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 5002.007803121249,
+    "avgNewFee": 64874.818727490994,
+    "medianChangePct": 1156.3974410235905
+   },
+   {
+    "id": "GKybPT5ZzV5NgkXy1Pa8Bnu14MS7euEtK8j9zWHzYJpx",
+    "label": null,
+    "n": 1495,
+    "share": 0.31970266582838275,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 64795.95852842809,
+    "avgNewFee": 69392.9779264214,
+    "medianChangePct": 62.4
+   },
+   {
+    "id": "brrnmzmsmY8codsU5kAoDpABL8CiBKejkyV5YnyykPa",
+    "label": null,
+    "n": 1319,
+    "share": 0.2820654289148073,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 6358.150113722517,
+    "avgNewFee": 25991.150113722517,
+    "medianChangePct": 327.21666666666664
+   },
+   {
+    "id": "Archer8kgiavM61GyusMzaaS2ft5sALtNsD1HxkUPMhy",
+    "label": null,
+    "n": 1271,
+    "share": 0.27180072793837756,
+    "pctMore": 0.3933910306845004,
+    "pctLess": 99.6066089693155,
+    "avgTodayFee": 5439.143194335169,
+    "avgNewFee": 4100.10936270653,
+    "medianChangePct": -31.83453237410072
+   },
+   {
+    "id": "3QUnrcMqCQoiGB73s1A6uDzxziywaNFpTLiZiiZbEUoN",
+    "label": null,
+    "n": 1269,
+    "share": 0.2713730320643597,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 19926.79353821907,
+    "avgNewFee": 48806.34121355398,
+    "medianChangePct": 238.1711061322712
+   },
+   {
+    "id": "FW6zUqn4iKRaeopwwhwsquTY6ABWLLgjxtrC3VPnaWBf",
+    "label": null,
+    "n": 1218,
+    "share": 0.26046678727690314,
+    "pctMore": 0.41050903119868637,
+    "pctLess": 99.58949096880131,
+    "avgTodayFee": 5311.28078817734,
+    "avgNewFee": 4689.340722495895,
+    "medianChangePct": -12.313725490196079
+   },
+   {
+    "id": "vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P",
+    "label": null,
+    "n": 1155,
+    "share": 0.24699436724533916,
+    "pctMore": 9.956709956709958,
+    "pctLess": 90.04329004329004,
+    "avgTodayFee": 5477.126406926407,
+    "avgNewFee": 6397.145454545454,
+    "medianChangePct": -8.508946322067594
+   },
+   {
+    "id": "VeLoXemE5sA5Co5NnQM2SKYW5ovddcYrCytHX5gWDyV",
+    "label": null,
+    "n": 1141,
+    "share": 0.24400049612721386,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 7810.799298860648,
+    "avgNewFee": 39638.98422436459,
+    "medianChangePct": 451.2806389424401
+   },
+   {
+    "id": "SAGE2HAwep459SNq61LHvjxPk4pLPEJLoMETef7f7EE",
+    "label": null,
+    "n": 972,
+    "share": 0.20786019477270104,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 5569.958847736625,
+    "avgNewFee": 36082.083333333336,
+    "medianChangePct": 394.2622950819672
+   },
+   {
+    "id": "FaJeucKqfFyzcv4fYynwVoX7YPGcXiXxoGRk8SMM5XDD",
+    "label": null,
+    "n": 959,
+    "share": 0.20508017159158468,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 29984.576642335767,
+    "avgNewFee": 60573.87069864442,
+    "medianChangePct": 132.35306616803365
+   },
+   {
+    "id": "FLUX6xBayGxLX9UcimVRxXFMHH6q43mAbRvDzSpCsvfK",
+    "label": null,
+    "n": 911,
+    "share": 0.19481547061515497,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 7881.915477497256,
+    "avgNewFee": 5586.915477497256,
+    "medianChangePct": -28.6875
+   }
+  ],
+  "g1_4": [
+   {
+    "id": "Vote111111111111111111111111111111111111111",
+    "label": "Vote",
+    "n": 181487,
+    "share": 38.810620543943614,
+    "pctMore": 99.28204223994005,
+    "pctLess": 0.7179577600599493,
+    "avgTodayFee": 5035.897888002997,
+    "avgNewFee": 7687.283634640497,
+    "medianChangePct": 53.72
+   },
+   {
+    "id": "11111111111111111111111111111111",
+    "label": "System",
+    "n": 62901,
+    "share": 13.451249085800068,
+    "pctMore": 96.57716093543823,
+    "pctLess": 3.4228390645617717,
+    "avgTodayFee": 53696.71011589641,
+    "avgNewFee": 88592.03818699226,
+    "medianChangePct": 319.57911145752144
+   },
+   {
+    "id": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    "label": "SPL Token",
+    "n": 32041,
+    "share": 6.851901749703821,
+    "pctMore": 99.52560781498705,
+    "pctLess": 0.47439218501295216,
+    "avgTodayFee": 40987.78199806498,
+    "avgNewFee": 164769.23454324147,
+    "medianChangePct": 1549.08
+   },
+   {
+    "id": "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih",
+    "label": null,
+    "n": 21843,
+    "share": 4.671080488086531,
+    "pctMore": 65.22455706633704,
+    "pctLess": 34.77544293366296,
+    "avgTodayFee": 8112.22886050451,
+    "avgNewFee": 32345.55111477361,
+    "medianChangePct": 105.71885622875425
+   },
+   {
+    "id": "9H6tua7jkLhdm3w8BvgpTn5LZNU7g4ZynDmCiNN3q6Rp",
+    "label": null,
+    "n": 12917,
+    "share": 2.762273802344629,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 8770.56514670589,
+    "avgNewFee": 6755.5651467058915,
+    "medianChangePct": -38.12677388836329
+   },
+   {
+    "id": "fastC7gqs2WUXgcyNna2BZAe9mte4zcTGprv3mv18N3",
+    "label": null,
+    "n": 12007,
+    "share": 2.5676721796664825,
+    "pctMore": 4.355792454401599,
+    "pctLess": 95.6442075455984,
+    "avgTodayFee": 9179.187723827767,
+    "avgNewFee": 7379.808528358458,
+    "medianChangePct": -23.138856476079347
+   },
+   {
+    "id": "2VSNUquk7FqkbS27WJpm6J1175EhoLcGtxuExu3wrzVz",
+    "label": null,
+    "n": 8627,
+    "share": 1.8448661525762262,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 11390.183957343224,
+    "avgNewFee": 89116.82751825664,
+    "medianChangePct": 1424.310408238323
+   },
+   {
+    "id": "TessVdML9pBGgG9yGks7o4HewRaXVAMuoVj4x83GLQH",
+    "label": null,
+    "n": 8550,
+    "share": 1.8283998614265367,
+    "pctMore": 21.84795321637427,
+    "pctLess": 78.15204678362574,
+    "avgTodayFee": 5953.9045614035085,
+    "avgNewFee": 4893.7314619883045,
+    "medianChangePct": -38.78570001997204
+   },
+   {
+    "id": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+    "label": "Jupiter v6",
+    "n": 8266,
+    "share": 1.7676670473159943,
+    "pctMore": 99.97580450036293,
+    "pctLess": 0.024195499637067505,
+    "avgTodayFee": 20993.251754173725,
+    "avgNewFee": 79270.13900314542,
+    "medianChangePct": 590.1804494630798
+   },
+   {
+    "id": "DhpyNWkdxFh3DRPsBrwRwrK3TYC5t7Q4arnSvf3t84HY",
+    "label": null,
+    "n": 6547,
+    "share": 1.4000624435976066,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 7582.576599969451,
+    "avgNewFee": 30438.055445242095,
+    "medianChangePct": 377.3837105685261
+   },
+   {
+    "id": "3bqo2w922U8RsHx86LZSoNR2gUJE5HGNYB7BU66RnGjK",
+    "label": null,
+    "n": 5224,
+    "share": 1.1171416229347635,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 12286.300727411945,
+    "avgNewFee": 32676.977220520675,
+    "medianChangePct": 318.2465579996835
+   },
+   {
+    "id": "NA247a7YE9S3p9CdKmMyETx8TTwbSdVbVYHHxpnHTUV",
+    "label": null,
+    "n": 5156,
+    "share": 1.102599963218155,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 10165.245539177657,
+    "avgNewFee": 108963.72692009309,
+    "medianChangePct": 1594.4206714944044
+   },
+   {
+    "id": "Prism8hsRo6Ww5jiN5Zeh3YDPLZHqHduCPSAV7JF7qv",
+    "label": null,
+    "n": 5112,
+    "share": 1.093190653989761,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 13835.579225352112,
+    "avgNewFee": 102256.17038341158,
+    "medianChangePct": 1377.9152489947417
+   },
+   {
+    "id": "W1LDCARDa67SPBG7TFpQivHnEZXRtxCFP13ysEd1bWR",
+    "label": null,
+    "n": 4922,
+    "share": 1.0525595459580601,
+    "pctMore": 10.767980495733442,
+    "pctLess": 89.23201950426656,
+    "avgTodayFee": 5343.511580658269,
+    "avgNewFee": 3732.4599756196667,
+    "medianChangePct": -38.35488101929923
+   },
+   {
+    "id": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+    "label": "pump.fun",
+    "n": 4383,
+    "share": 0.9372955079102352,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 189500.90440337668,
+    "avgNewFee": 214789.99749030345,
+    "medianChangePct": 331.2697160883281
+   },
+   {
+    "id": "5kZmvKbaqNjSNEnQKEREEKu5r9JkaDRKrQMUvZagCMoz",
+    "label": null,
+    "n": 4087,
+    "share": 0.8739965185555855,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 8473.195497920235,
+    "avgNewFee": 31438.80743821874,
+    "medianChangePct": 408.37491090520314
+   },
+   {
+    "id": "2DNbzPochEcyCcWMbL4d9S3u9QqQEj5bbe6cSZFvKsbh",
+    "label": null,
+    "n": 3742,
+    "share": 0.8002189802874972,
+    "pctMore": 2.939604489577766,
+    "pctLess": 97.06039551042224,
+    "avgTodayFee": 5000,
+    "avgNewFee": 4636.743987172635,
+    "medianChangePct": -38.98
+   },
+   {
+    "id": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+    "label": "Memo",
+    "n": 3630,
+    "share": 0.7762680113424946,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 30011.502479338844,
+    "avgNewFee": 74478.82451790634,
+    "medianChangePct": 266.92525734745635
+   },
+   {
+    "id": "FsU1rcaEC361jBr9JE5wm7bpWRSTYeAMN4R2MCs11rNF",
+    "label": null,
+    "n": 3457,
+    "share": 0.739272318239946,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 5323.291582296789,
+    "avgNewFee": 91581.64477870986,
+    "medianChangePct": 1651.5469824293355
+   },
+   {
+    "id": "6FCD55UeSe9kE5nfXZB3pwNqwRcD5S9ZdU43G529eGra",
+    "label": null,
+    "n": 3237,
+    "share": 0.6922257720979765,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 12118.020698177324,
+    "avgNewFee": 32468.522397281435,
+    "medianChangePct": 314.6307798481712
+   },
+   {
+    "id": "Hd7c1kYHqYJ7dD1bLf9C61XC22JgbGp4P1PQ8UNcUH5w",
+    "label": null,
+    "n": 2993,
+    "share": 0.6400468754677924,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 6209.141329769462,
+    "avgNewFee": 51318.42833277648,
+    "medianChangePct": 641.7613636363636
+   },
+   {
+    "id": "BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi",
+    "label": null,
+    "n": 2829,
+    "share": 0.6049758137983242,
+    "pctMore": 30.045952633439377,
+    "pctLess": 69.95404736656063,
+    "avgTodayFee": 10399.62460233298,
+    "avgNewFee": 13793.124779073878,
+    "medianChangePct": -18.520642201834864
+   },
+   {
+    "id": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+    "label": "Token-2022",
+    "n": 2663,
+    "share": 0.5694770562548382,
+    "pctMore": 99.24896733007887,
+    "pctLess": 0.7510326699211416,
+    "avgTodayFee": 19322.533984228314,
+    "avgNewFee": 121291.01539616974,
+    "medianChangePct": 796.7875
+   },
+   {
+    "id": "ojh19ojaKduoJZuaJADhcVGp4xt1TcdAvZmpVsCorch",
+    "label": null,
+    "n": 2328,
+    "share": 0.4978379973568395,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 8589.57001718213,
+    "avgNewFee": 6662.692010309278,
+    "medianChangePct": -31.12439794054144
+   },
+   {
+    "id": "dijkbkCAKfFTCxQg3u1pg82gVU1jJGHBBRcteD11mBu",
+    "label": null,
+    "n": 2263,
+    "share": 0.48393788145125766,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 5001.021652673442,
+    "avgNewFee": 3079.9085285019887,
+    "medianChangePct": -38.652269546090785
+   },
+   {
+    "id": "QuaNtZsgYRe5Z9Bk4LZ4cTD9tbkVoyCNf1R2BN9bBDv",
+    "label": null,
+    "n": 2118,
+    "share": 0.4529299305849596,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 6784.408404154863,
+    "avgNewFee": 8935.727573182248,
+    "medianChangePct": 36.67796610169491
+   },
+   {
+    "id": "6MWVTis8rmmk6Vt9zmAJJbmb3VuLpzoQ1aHH4N6wQEGh",
+    "label": null,
+    "n": 2019,
+    "share": 0.43175898482107344,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 32411.184249628528,
+    "avgNewFee": 108088.25656265477,
+    "medianChangePct": 390.1933701657458
+   },
+   {
+    "id": "B72M6nyCLFgWiJtAN4naUTminMiTmyGcEqQHXwVeRdht",
+    "label": null,
+    "n": 1777,
+    "share": 0.38000778406490715,
+    "pctMore": 33.145751266178955,
+    "pctLess": 66.85424873382104,
+    "avgTodayFee": 5767.075407990996,
+    "avgNewFee": 5712.864378165447,
+    "medianChangePct": -20.267056886775197
+   },
+   {
+    "id": "4Qv3mbzcq1bKmrhGG4voS3EemfPd7f838FLUU7wBHSyi",
+    "label": null,
+    "n": 1682,
+    "share": 0.3596922300490567,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 43088.28061831153,
+    "avgNewFee": 142919.8269916766,
+    "medianChangePct": 553.0263456734045
+   },
+   {
+    "id": "BYdq7NJXWHnTzzCogT6VByrPXvUQwkD5PuZQLS8JvZtw",
+    "label": null,
+    "n": 1666,
+    "share": 0.35627066305691346,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 5002.007803121249,
+    "avgNewFee": 158433.40336134454,
+    "medianChangePct": 2965.953618552579
+   },
+   {
+    "id": "GKybPT5ZzV5NgkXy1Pa8Bnu14MS7euEtK8j9zWHzYJpx",
+    "label": null,
+    "n": 1495,
+    "share": 0.31970266582838275,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 64795.95852842809,
+    "avgNewFee": 80037.77123745819,
+    "medianChangePct": 228.77999999999997
+   },
+   {
+    "id": "brrnmzmsmY8codsU5kAoDpABL8CiBKejkyV5YnyykPa",
+    "label": null,
+    "n": 1319,
+    "share": 0.2820654289148073,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 6358.150113722517,
+    "avgNewFee": 59190.15011372252,
+    "medianChangePct": 880.5333333333333
+   },
+   {
+    "id": "Archer8kgiavM61GyusMzaaS2ft5sALtNsD1HxkUPMhy",
+    "label": null,
+    "n": 1271,
+    "share": 0.27180072793837756,
+    "pctMore": 34.461054287962234,
+    "pctLess": 65.53894571203777,
+    "avgTodayFee": 5439.143194335169,
+    "avgNewFee": 5840.822974036192,
+    "medianChangePct": -4.664141917480566
+   },
+   {
+    "id": "3QUnrcMqCQoiGB73s1A6uDzxziywaNFpTLiZiiZbEUoN",
+    "label": null,
+    "n": 1269,
+    "share": 0.2713730320643597,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 19926.79353821907,
+    "avgNewFee": 95874.92750197006,
+    "medianChangePct": 626.5289187619285
+   },
+   {
+    "id": "FW6zUqn4iKRaeopwwhwsquTY6ABWLLgjxtrC3VPnaWBf",
+    "label": null,
+    "n": 1218,
+    "share": 0.26046678727690314,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 5311.28078817734,
+    "avgNewFee": 7505.431855500821,
+    "medianChangePct": 42.72549019607843
+   },
+   {
+    "id": "vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P",
+    "label": null,
+    "n": 1155,
+    "share": 0.24699436724533916,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 5477.126406926407,
+    "avgNewFee": 11525.341125541125,
+    "medianChangePct": 53.240556660039765
+   },
+   {
+    "id": "VeLoXemE5sA5Co5NnQM2SKYW5ovddcYrCytHX5gWDyV",
+    "label": null,
+    "n": 1141,
+    "share": 0.24400049612721386,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 7810.799298860648,
+    "avgNewFee": 91130.4022787029,
+    "medianChangePct": 1180.2495543672014
+   },
+   {
+    "id": "SAGE2HAwep459SNq61LHvjxPk4pLPEJLoMETef7f7EE",
+    "label": null,
+    "n": 972,
+    "share": 0.20786019477270104,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 5569.958847736625,
+    "avgNewFee": 85607.53189300411,
+    "medianChangePct": 1060.6357457017193
+   },
+   {
+    "id": "FaJeucKqfFyzcv4fYynwVoX7YPGcXiXxoGRk8SMM5XDD",
+    "label": null,
+    "n": 959,
+    "share": 0.20508017159158468,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 29984.576642335767,
+    "avgNewFee": 110207.07612095933,
+    "medianChangePct": 346.81908971144446
+   },
+   {
+    "id": "FLUX6xBayGxLX9UcimVRxXFMHH6q43mAbRvDzSpCsvfK",
+    "label": null,
+    "n": 911,
+    "share": 0.19481547061515497,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 7881.915477497256,
+    "avgNewFee": 5893.915477497256,
+    "medianChangePct": -24.85
+   }
+  ],
+  "g1_2": [
+   {
+    "id": "Vote111111111111111111111111111111111111111",
+    "label": "Vote",
+    "n": 181487,
+    "share": 38.810620543943614,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 5035.897888002997,
+    "avgNewFee": 12873.575914528314,
+    "medianChangePct": 157.42000000000002
+   },
+   {
+    "id": "11111111111111111111111111111111",
+    "label": "System",
+    "n": 62901,
+    "share": 13.451249085800068,
+    "pctMore": 98.13675458259806,
+    "pctLess": 1.863245417401949,
+    "avgTodayFee": 53696.71011589641,
+    "avgNewFee": 126179.0692993752,
+    "medianChangePct": 684.1305153874675
+   },
+   {
+    "id": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    "label": "SPL Token",
+    "n": 32041,
+    "share": 6.851901749703821,
+    "pctMore": 99.934458974439,
+    "pctLess": 0.06554102556099997,
+    "avgTodayFee": 40987.78199806498,
+    "avgNewFee": 292458.44399363315,
+    "medianChangePct": 3148.16
+   },
+   {
+    "id": "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih",
+    "label": null,
+    "n": 21843,
+    "share": 4.671080488086531,
+    "pctMore": 65.88380716934486,
+    "pctLess": 34.11619283065513,
+    "avgTodayFee": 8112.22886050451,
+    "avgNewFee": 59078.33772833402,
+    "medianChangePct": 261.40771845630877
+   },
+   {
+    "id": "9H6tua7jkLhdm3w8BvgpTn5LZNU7g4ZynDmCiNN3q6Rp",
+    "label": null,
+    "n": 12917,
+    "share": 2.762273802344629,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 8770.56514670589,
+    "avgNewFee": 7240.5651467058915,
+    "medianChangePct": -28.949858088930934
+   },
+   {
+    "id": "fastC7gqs2WUXgcyNna2BZAe9mte4zcTGprv3mv18N3",
+    "label": null,
+    "n": 12007,
+    "share": 2.5676721796664825,
+    "pctMore": 4.355792454401599,
+    "pctLess": 95.6442075455984,
+    "avgTodayFee": 9179.187723827767,
+    "avgNewFee": 8080.32747563921,
+    "medianChangePct": -17.106184364060677
+   },
+   {
+    "id": "2VSNUquk7FqkbS27WJpm6J1175EhoLcGtxuExu3wrzVz",
+    "label": null,
+    "n": 8627,
+    "share": 1.8448661525762262,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 11390.183957343224,
+    "avgNewFee": 169342.84096441406,
+    "medianChangePct": 2894.5752114748066
+   },
+   {
+    "id": "TessVdML9pBGgG9yGks7o4HewRaXVAMuoVj4x83GLQH",
+    "label": null,
+    "n": 8550,
+    "share": 1.8283998614265367,
+    "pctMore": 21.84795321637427,
+    "pctLess": 78.15204678362574,
+    "avgTodayFee": 5953.9045614035085,
+    "avgNewFee": 6332.5583625731,
+    "medianChangePct": -27.661274216097464
+   },
+   {
+    "id": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+    "label": "Jupiter v6",
+    "n": 8266,
+    "share": 1.7676670473159943,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 20993.251754173725,
+    "avgNewFee": 140136.67094120494,
+    "medianChangePct": 1214.5372010628876
+   },
+   {
+    "id": "DhpyNWkdxFh3DRPsBrwRwrK3TYC5t7Q4arnSvf3t84HY",
+    "label": null,
+    "n": 6547,
+    "share": 1.4000624435976066,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 7582.576599969451,
+    "avgNewFee": 55919.0332976936,
+    "medianChangePct": 796.9850948509485
+   },
+   {
+    "id": "3bqo2w922U8RsHx86LZSoNR2gUJE5HGNYB7BU66RnGjK",
+    "label": null,
+    "n": 5224,
+    "share": 1.1171416229347635,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 12286.300727411945,
+    "avgNewFee": 55573.91117917305,
+    "medianChangePct": 676.056338028169
+   },
+   {
+    "id": "NA247a7YE9S3p9CdKmMyETx8TTwbSdVbVYHHxpnHTUV",
+    "label": null,
+    "n": 5156,
+    "share": 1.102599963218155,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 10165.245539177657,
+    "avgNewFee": 210262.05275407294,
+    "medianChangePct": 3229.4395465994958
+   },
+   {
+    "id": "Prism8hsRo6Ww5jiN5Zeh3YDPLZHqHduCPSAV7JF7qv",
+    "label": null,
+    "n": 5112,
+    "share": 1.093190653989761,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 13835.579225352112,
+    "avgNewFee": 193176.09507042254,
+    "medianChangePct": 2793.80718737568
+   },
+   {
+    "id": "W1LDCARDa67SPBG7TFpQivHnEZXRtxCFP13ysEd1bWR",
+    "label": null,
+    "n": 4922,
+    "share": 1.0525595459580601,
+    "pctMore": 10.767980495733442,
+    "pctLess": 89.23201950426656,
+    "avgTodayFee": 5343.511580658269,
+    "avgNewFee": 4621.338277123121,
+    "medianChangePct": -29.78882451878154
+   },
+   {
+    "id": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+    "label": "pump.fun",
+    "n": 4383,
+    "share": 0.9372955079102352,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 189500.90440337668,
+    "avgNewFee": 242652.74013232946,
+    "medianChangePct": 710.8044164037855
+   },
+   {
+    "id": "5kZmvKbaqNjSNEnQKEREEKu5r9JkaDRKrQMUvZagCMoz",
+    "label": null,
+    "n": 4087,
+    "share": 0.8739965185555855,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 8473.195497920235,
+    "avgNewFee": 56904.412282848054,
+    "medianChangePct": 861.2972202423379
+   },
+   {
+    "id": "2DNbzPochEcyCcWMbL4d9S3u9QqQEj5bbe6cSZFvKsbh",
+    "label": null,
+    "n": 3742,
+    "share": 0.8002189802874972,
+    "pctMore": 2.939604489577766,
+    "pctLess": 97.06039551042224,
+    "avgTodayFee": 5000,
+    "avgNewFee": 6772.4895777659,
+    "medianChangePct": -27.98
+   },
+   {
+    "id": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+    "label": "Memo",
+    "n": 3630,
+    "share": 0.7762680113424946,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 30011.502479338844,
+    "avgNewFee": 123636.98044077135,
+    "medianChangePct": 546.2827589636481
+   },
+   {
+    "id": "FsU1rcaEC361jBr9JE5wm7bpWRSTYeAMN4R2MCs11rNF",
+    "label": null,
+    "n": 3457,
+    "share": 0.739272318239946,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 5323.291582296789,
+    "avgNewFee": 180339.49320219844,
+    "medianChangePct": 3350.8986615678778
+   },
+   {
+    "id": "6FCD55UeSe9kE5nfXZB3pwNqwRcD5S9ZdU43G529eGra",
+    "label": null,
+    "n": 3237,
+    "share": 0.6922257720979765,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 12118.020698177324,
+    "avgNewFee": 55329.40253320976,
+    "medianChangePct": 669.7882595971768
+   },
+   {
+    "id": "Hd7c1kYHqYJ7dD1bLf9C61XC22JgbGp4P1PQ8UNcUH5w",
+    "label": null,
+    "n": 2993,
+    "share": 0.6400468754677924,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 6209.141329769462,
+    "avgNewFee": 98927.21450050117,
+    "medianChangePct": 1319.0198863636363
+   },
+   {
+    "id": "BiSoNHVpsVZW2F7rx2eQ59yQwKxzU5NvBcmKshCSUypi",
+    "label": null,
+    "n": 2829,
+    "share": 0.6049758137983242,
+    "pctMore": 30.045952633439377,
+    "pctLess": 69.95404736656063,
+    "avgTodayFee": 10399.62460233298,
+    "avgNewFee": 19686.11417462001,
+    "medianChangePct": -13.149847094801222
+   },
+   {
+    "id": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+    "label": "Token-2022",
+    "n": 2663,
+    "share": 0.5694770562548382,
+    "pctMore": 99.8122418325197,
+    "pctLess": 0.1877581674802854,
+    "avgTodayFee": 19322.533984228314,
+    "avgNewFee": 229176.21216672927,
+    "medianChangePct": 1687.3249999999998
+   },
+   {
+    "id": "ojh19ojaKduoJZuaJADhcVGp4xt1TcdAvZmpVsCorch",
+    "label": null,
+    "n": 2328,
+    "share": 0.4978379973568395,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 8589.57001718213,
+    "avgNewFee": 7235.396048109966,
+    "medianChangePct": -20.727453911310416
+   },
+   {
+    "id": "dijkbkCAKfFTCxQg3u1pg82gVU1jJGHBBRcteD11mBu",
+    "label": null,
+    "n": 2263,
+    "share": 0.48393788145125766,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 5001.021652673442,
+    "avgNewFee": 3657.7971718957137,
+    "medianChangePct": -27.334533093381324
+   },
+   {
+    "id": "QuaNtZsgYRe5Z9Bk4LZ4cTD9tbkVoyCNf1R2BN9bBDv",
+    "label": null,
+    "n": 2118,
+    "share": 0.4529299305849596,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 6784.408404154863,
+    "avgNewFee": 13586.047686496695,
+    "medianChangePct": 115.71186440677965
+   },
+   {
+    "id": "6MWVTis8rmmk6Vt9zmAJJbmb3VuLpzoQ1aHH4N6wQEGh",
+    "label": null,
+    "n": 2019,
+    "share": 0.43175898482107344,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 32411.184249628528,
+    "avgNewFee": 186264.8271421496,
+    "medianChangePct": 793.1757724575405
+   },
+   {
+    "id": "B72M6nyCLFgWiJtAN4naUTminMiTmyGcEqQHXwVeRdht",
+    "label": null,
+    "n": 1777,
+    "share": 0.38000778406490715,
+    "pctMore": 65.8975801913337,
+    "pctLess": 34.10241980866629,
+    "avgTodayFee": 5767.075407990996,
+    "avgNewFee": 8158.127180641531,
+    "medianChangePct": 4.929844520288206
+   },
+   {
+    "id": "4Qv3mbzcq1bKmrhGG4voS3EemfPd7f838FLUU7wBHSyi",
+    "label": null,
+    "n": 1682,
+    "share": 0.3596922300490567,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 43088.28061831153,
+    "avgNewFee": 245251.0172413793,
+    "medianChangePct": 1120.0868983957218
+   },
+   {
+    "id": "BYdq7NJXWHnTzzCogT6VByrPXvUQwkD5PuZQLS8JvZtw",
+    "label": null,
+    "n": 1666,
+    "share": 0.35627066305691346,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 5002.007803121249,
+    "avgNewFee": 314364.33913565427,
+    "medianChangePct": 5981.88724510196
+   },
+   {
+    "id": "GKybPT5ZzV5NgkXy1Pa8Bnu14MS7euEtK8j9zWHzYJpx",
+    "label": null,
+    "n": 1495,
+    "share": 0.31970266582838275,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 64795.95852842809,
+    "avgNewFee": 97779.08561872909,
+    "medianChangePct": 507.54
+   },
+   {
+    "id": "brrnmzmsmY8codsU5kAoDpABL8CiBKejkyV5YnyykPa",
+    "label": null,
+    "n": 1319,
+    "share": 0.2820654289148073,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 6358.150113722517,
+    "avgNewFee": 114522.15011372251,
+    "medianChangePct": 1802.7333333333336
+   },
+   {
+    "id": "Archer8kgiavM61GyusMzaaS2ft5sALtNsD1HxkUPMhy",
+    "label": null,
+    "n": 1271,
+    "share": 0.27180072793837756,
+    "pctMore": 98.2690794649882,
+    "pctLess": 1.730920535011802,
+    "avgTodayFee": 5439.143194335169,
+    "avgNewFee": 8741.91345397325,
+    "medianChangePct": 40.0709219858156
+   },
+   {
+    "id": "3QUnrcMqCQoiGB73s1A6uDzxziywaNFpTLiZiiZbEUoN",
+    "label": null,
+    "n": 1269,
+    "share": 0.2713730320643597,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 19926.79353821907,
+    "avgNewFee": 174322.5453112687,
+    "medianChangePct": 1273.8030039000912
+   },
+   {
+    "id": "FW6zUqn4iKRaeopwwhwsquTY6ABWLLgjxtrC3VPnaWBf",
+    "label": null,
+    "n": 1218,
+    "share": 0.26046678727690314,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 5311.28078817734,
+    "avgNewFee": 12198.582922824302,
+    "medianChangePct": 134.45098039215685
+   },
+   {
+    "id": "vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P",
+    "label": null,
+    "n": 1155,
+    "share": 0.24699436724533916,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 5477.126406926407,
+    "avgNewFee": 20073.49437229437,
+    "medianChangePct": 156.18290258449304
+   },
+   {
+    "id": "VeLoXemE5sA5Co5NnQM2SKYW5ovddcYrCytHX5gWDyV",
+    "label": null,
+    "n": 1141,
+    "share": 0.24400049612721386,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 7810.799298860648,
+    "avgNewFee": 176949.36371603856,
+    "medianChangePct": 2399.7803002563164
+   },
+   {
+    "id": "SAGE2HAwep459SNq61LHvjxPk4pLPEJLoMETef7f7EE",
+    "label": null,
+    "n": 972,
+    "share": 0.20786019477270104,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 5569.958847736625,
+    "avgNewFee": 168149.9135802469,
+    "medianChangePct": 2171.2315073970412
+   },
+   {
+    "id": "FaJeucKqfFyzcv4fYynwVoX7YPGcXiXxoGRk8SMM5XDD",
+    "label": null,
+    "n": 959,
+    "share": 0.20508017159158468,
+    "pctMore": 100,
+    "pctLess": 0,
+    "avgTodayFee": 29984.576642335767,
+    "avgNewFee": 192929.0510948905,
+    "medianChangePct": 704.2582125706515
+   },
+   {
+    "id": "FLUX6xBayGxLX9UcimVRxXFMHH6q43mAbRvDzSpCsvfK",
+    "label": null,
+    "n": 911,
+    "share": 0.19481547061515497,
+    "pctMore": 0,
+    "pctLess": 100,
+    "avgTodayFee": 7881.915477497256,
+    "avgNewFee": 6405.768386388584,
+    "medianChangePct": -18.45
+   }
+  ]
+ }
+}</script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById("summary").textContent);
+  const M = D.meta;
+
+  const n0 = (x) => Math.round(x).toLocaleString("en-US");
+  const n1 = (x) => x.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const pc = (x) => (x >= 0 ? "+" : "") + n1(x) + "%";
+  const lam = (x) => n0(x) + " ł";
+  const cls = (x) => (x > 0 ? "pos" : x < 0 ? "neg" : "");
+
+  const GATE_KEYS = [["g1_10", "1/10"], ["g1_4", "1/4"], ["g1_2", "1/2"]];
+  const COHORTS = [["all", "All"], ["nonVote", "Non-vote"], ["vote", "Vote"]];
+  let gate = "g1_10", cohort = "all";
+
+  // ---- provenance ----
+  document.getElementById("prov").innerHTML = [
+    ["Sample", n0(M.transactions) + " txs"],
+    ["Blocks", n0(M.blocks)],
+    ["Votes", n1(M.votePct) + "%"],
+    ["Sets CU limit", n1(M.setsCuLimitPct) + "%"],
+    ["Sets loaded-size limit", n1(M.setsLoadedSizePct) + "%"],
+    ["Generated", M.generatedAt.slice(0, 16).replace("T", " ") + " UTC"],
+  ].map(([k, v]) => "<span><b>" + k + "</b> " + v + "</span>").join("");
+
+  // ---- selectors ----
+  function seg(el, items, cur, onPick) {
+    el.innerHTML = items.map(([k, l]) =>
+      '<button type="button" data-k="' + k + '" aria-pressed="' + (k === cur) + '">' + l + "</button>"
+    ).join("");
+    el.querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", () => { onPick(b.dataset.k); })
+    );
+  }
+
+  function render() {
+    const G = D.gates[gate];
+    const S = G[cohort];
+
+    seg(document.getElementById("gateSel"), GATE_KEYS, gate, (k) => { gate = k; render(); });
+    seg(document.getElementById("cohortSel"), COHORTS, cohort, (k) => { cohort = k; render(); });
+
+    // tiles
+    document.getElementById("tiles").innerHTML = [
+      { l: "Pay more", v: n1(S.pctMore) + "%", s: n0(S.more) + " txs", c: "up" },
+      { l: "Pay less", v: n1(S.pctLess) + "%", s: n0(S.less) + " txs", c: "down" },
+      { l: "Median change", v: pc(S.p.p50), s: "p25 " + pc(S.p.p25) + " · p75 " + pc(S.p.p75),
+        c: S.p.p50 > 0 ? "up" : "down" },
+      { l: "Avg fee / tx", v: lam(S.avgNewFee), s: "today " + lam(S.avgTodayFee), c: S.avgNewFee > S.avgTodayFee ? "up" : "down" },
+      { l: "Burn per day", v: n0(G.burn.newPerDaySol) + " SOL", s: "today " + n0(G.burn.todayPerDaySol) + " SOL · " + n1(G.burn.multiple) + "×", c: "up" },
+    ].map((t) =>
+      '<div class="tile ' + t.c + '"><div class="tile-label">' + t.l + '</div>' +
+      '<div class="tile-value">' + t.v + '</div><div class="tile-sub">' + t.s + "</div></div>"
+    ).join("");
+
+    // headline callout
+    const lbl = cohort === "all" ? "all transactions" : cohort === "vote" ? "vote transactions" : "non-vote transactions";
+    document.getElementById("headline").innerHTML =
+      "<p>At the <strong>" + G.label + "</strong> gate, <strong>" + n1(S.pctMore) + "%</strong> of " + lbl +
+      " in this sample would pay more than they did on chain, <strong>" + n1(S.pctLess) +
+      "%</strong> would pay less. Median change <strong>" + pc(S.p.p50) +
+      "</strong>. Daily burn moves from <strong>" + n0(G.burn.todayPerDaySol) + " SOL</strong> to <strong>" +
+      n0(G.burn.newPerDaySol) + " SOL</strong>.</p>";
+
+    // distribution
+    const bk = S.buckets;
+    const max = Math.max(...Object.values(bk));
+    document.getElementById("dist").innerHTML = Object.entries(bk).map(([k, v]) => {
+      const kind = k === "no change" ? "zero" : k.startsWith("<") || k.startsWith("-") ? "neg" : "pos";
+      const share = S.n ? (v / S.n) * 100 : 0;
+      return '<div class="dist-row"><div class="dist-key">' + k + "</div>" +
+        '<div class="dist-track"><div class="dist-bar ' + kind + '" style="width:' +
+        (max ? (v / max) * 100 : 0) + '%"></div></div>' +
+        '<div class="dist-val">' + n1(share) + "%</div></div>";
+    }).join("");
+
+    // pattern table
+    const PAT = [
+      ["neither", "Sets neither limit"],
+      ["cuOnly", "CU limit only"],
+      ["loadedOnly", "Loaded-size limit only"],
+      ["both", "Sets both limits"],
+    ];
+    document.getElementById("patternTbl").innerHTML =
+      "<thead><tr><th>Cohort</th><th>Txs</th><th>Share</th><th>Pay more</th><th>Median change</th><th>Avg fee today</th><th>Avg fee new</th></tr></thead><tbody>" +
+      PAT.map(([k, l]) => {
+        const p = G.byPattern[k];
+        if (!p || !p.n) return "";
+        return "<tr><td>" + l + "</td><td>" + n0(p.n) + "</td><td>" +
+          n1((p.n / M.transactions) * 100) + "%</td><td>" + n1(p.pctMore) + "%</td>" +
+          '<td class="' + cls(p.p.p50) + '">' + pc(p.p.p50) + "</td><td>" + lam(p.avgTodayFee) +
+          "</td><td>" + lam(p.avgNewFee) + "</td></tr>";
+      }).join("") + "</tbody>";
+
+    // cost bucket table
+    document.getElementById("bucketTbl").innerHTML =
+      "<thead><tr><th>Requested cost units</th><th>Txs</th><th>Share</th><th>Pay more</th><th>Median change</th><th>Avg fee today</th><th>Avg fee new</th></tr></thead><tbody>" +
+      G.byCostBucket.map(([k, b]) =>
+        "<tr><td>" + k + "</td><td>" + n0(b.n) + "</td><td>" +
+        n1((b.n / M.transactions) * 100) + "%</td><td>" + n1(b.pctMore) + "%</td>" +
+        '<td class="' + cls(b.p.p50) + '">' + pc(b.p.p50) + "</td><td>" + lam(b.avgTodayFee) +
+        "</td><td>" + lam(b.avgNewFee) + "</td></tr>"
+      ).join("") + "</tbody>";
+
+    // program table
+    document.getElementById("progTbl").innerHTML =
+      "<thead><tr><th>Program</th><th>Txs</th><th>Share</th><th>Pay more</th><th>Median change</th><th>Avg fee today</th><th>Avg fee new</th></tr></thead><tbody>" +
+      D.programs[gate].slice(0, 20).map((p) =>
+        "<tr><td>" + (p.label ? p.label : "<span class=pid>" + p.id.slice(0, 22) + "…</span>") +
+        (p.label ? '<span class="pid">' + p.id.slice(0, 22) + "…</span>" : "") + "</td>" +
+        "<td>" + n0(p.n) + "</td><td>" + n1(p.share) + "%</td>" +
+        "<td>" + n1(p.pctMore) + "%</td>" +
+        '<td><span class="chip ' + (p.medianChangePct > 0 ? "pos" : "neg") + '">' + pc(p.medianChangePct) + "</span></td>" +
+        "<td>" + lam(p.avgTodayFee) + "</td><td>" + lam(p.avgNewFee) + "</td></tr>"
+      ).join("") + "</tbody>";
+
+    // scenarios
+    const A = G.all, O = G.optimized, V = G.voteMigratedScenario;
+    document.getElementById("scen").innerHTML = [
+      { h: "As-is today", p: "Traffic re-priced exactly as it was submitted, with no behaviour change.",
+        rows: [["Pay more", n1(A.pctMore) + "%"], ["Median change", pc(A.p.p50)], ["Burn / day", n0(G.burn.newPerDaySol) + " SOL"]] },
+      { h: "If senders requested accurately",
+        p: "Every transaction asks for " + M.cuHeadroom + "× the CU it actually consumed and declares its real loaded-accounts size.",
+        rows: [["Pay more", n1(O.pctMore) + "%"], ["Median change", pc(O.p.p50)], ["Burn / day", n0(G.burn.optimizedPerDaySol) + " SOL"]] },
+      { h: "If the vote feature activates",
+        p: "bls_pubkey_management_in_vote_account moves vote instructions from the 3k builtin allocation to the 200k default.",
+        rows: [["Pay more", n1(V.pctMore) + "%"], ["Median change", pc(V.p.p50)], ["Burn / day", n0(G.burn.voteMigratedPerDaySol) + " SOL"]] },
+    ].map((s) =>
+      '<div class="scen-card"><h3>' + s.h + "</h3><p>" + s.p + "</p>" +
+      s.rows.map((r) => '<div class="scen-stat"><span>' + r[0] + "</span><span>" + r[1] + "</span></div>").join("") +
+      "</div>"
+    ).join("");
+  }
+
+  document.getElementById("assumptions").innerHTML =
+    M.assumptions.map((a) => "<li>" + a + "</li>").join("");
+  document.getElementById("foot").innerHTML =
+    "Cost model ported from agave and validated to 100% against " + n0(M.transactions) +
+    " mainnet transactions · sample spans " + n0(M.blocks) + " blocks · " +
+    "projections assume " + n0(M.slotsPerDay) + " slots/day at " + n0(M.txPerBlock) + " txs/block";
+
+  render();
+})();
+</script>

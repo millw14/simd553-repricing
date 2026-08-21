@@ -286,6 +286,10 @@ tr.pick:focus-visible td { outline: 2px solid var(--ember); outline-offset: -2px
 
 /* ---------- method ---------- */
 .method { font-size: 13.5px; color: var(--text-dim); }
+/* long identifiers and pubkeys are unbreakable tokens wider than a phone --
+   let them wrap rather than push the page sideways */
+.method li, .method p, .method code, .sec-note,
+.scen-card p, .waste-card .wv, .detail-head .addr { overflow-wrap: anywhere; }
 .method li { margin-bottom: 8px; }
 .method code {
   font-family: var(--mono); font-size: 12px; background: var(--surface-2);

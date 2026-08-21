@@ -1,7 +1,5 @@
 <title>SIMD-0553 Repricing Monitor</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+__FONTS__
 
 <style>
 :root {
@@ -282,7 +280,8 @@ tr.pick:focus-visible td { outline: 2px solid var(--ember); outline-offset: -2px
   border-top: 1px solid var(--line); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
 }
 .callout p { margin: 0; font-size: 14px; color: var(--text-dim); }
-.callout strong { color: var(--text); }
+/* 600 rather than the default bold 700, so the page ships one fewer inlined face */
+.callout strong { color: var(--text); font-weight: 600; }
 
 /* ---------- method ---------- */
 .method { font-size: 13.5px; color: var(--text-dim); }

@@ -12,9 +12,20 @@ const tpl = fs.readFileSync("web/template.html", "utf8");
 const data = fs.readFileSync("web/summary.json", "utf8");
 const summary = JSON.parse(data);
 
+// Fonts are inlined as data URIs so the page makes no external requests at all.
+// Run `node src/fonts.mjs` to regenerate web/fonts.css.
+let fontCss;
+try {
+  fontCss = fs.readFileSync("web/fonts.css", "utf8");
+} catch {
+  throw new Error("web/fonts.css missing -- run `node src/fonts.mjs` first");
+}
+
 // guard against the JSON closing the script tag
 const safe = data.replace(/<\//g, "<\\/");
-const filled = tpl.replace("__SUMMARY__", safe);
+const filled = tpl
+  .replace("__FONTS__", `<style>\n${fontCss}</style>`)
+  .replace("__SUMMARY__", safe);
 
 // ---- artifact fragment ----
 fs.writeFileSync("web/index.html", filled);

@@ -120,9 +120,17 @@ node src/validate.mjs 5                       # prove the model against mainnet
 node src/ingest.mjs --from <startSlot> --to <endSlot> \
      --blocks 4000 --stride 107 --conc 12 --out data/epoch.jsonl
 node src/aggregate.mjs --in data/epoch.jsonl --out web/summary.json
-node src/build.mjs                            # -> self-contained web/index.html
+node src/build.mjs                            # -> web/index.html + docs/index.html
 node server.mjs                               # http://localhost:4553
 ```
+
+`build.mjs` emits two files from one template: `web/index.html` is a fragment (the
+Artifact platform supplies its own `<head>`), and `docs/index.html` is the standalone
+document GitHub Pages serves.
+
+The social card is not built by `build.mjs`. It is drawn on a canvas with the real
+typefaces: start the server, open `/web/og.html`, and the page POSTs the rendered PNG
+back to `docs/og.png`. Re-run it whenever the headline numbers change.
 
 Put `RPC_URL=https://…` in `simd553/.env` (gitignored, never logged in full — only
 the host is printed) or pass it in the environment. The public endpoint is archival

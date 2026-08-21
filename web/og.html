@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OG card generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  body { margin: 0; background: #222; display: grid; place-items: center; min-height: 100vh; }
+  canvas { width: 600px; height: 315px; box-shadow: 0 8px 40px rgba(0,0,0,.5); }
+</style>
+</head>
+<body>
+<canvas id="c" width="1200" height="630"></canvas>
+<script>
+// Draws the Open Graph card on a canvas using the dashboard's own palette and
+// typefaces, then exposes the PNG as window.__png for extraction.
+const C = {
+  bg: "#0D141C", surface: "#141E29", line: "#27384B",
+  text: "#DCE6F0", dim: "#93A5B8", mute: "#6C7F93",
+  ember: "#F0854A", teal: "#3ECBB0",
+};
+
+async function draw() {
+  const res = await fetch("summary.json");
+  const D = await res.json();
+  const M = D.meta;
+  const n0 = (x) => Math.round(x).toLocaleString("en-US");
+  const n1 = (x) => x.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  const cv = document.getElementById("c");
+  const x = cv.getContext("2d");
+  const W = 1200, H = 630, PAD = 72;
+
+  x.fillStyle = C.bg; x.fillRect(0, 0, W, H);
+
+  // ember rule, top left
+  x.fillStyle = C.ember; x.fillRect(PAD, PAD, 96, 5);
+
+  const ls = (v) => { if ("letterSpacing" in x) x.letterSpacing = v; };
+
+  // eyebrow
+  ls("2.6px");
+  x.font = "600 20px 'IBM Plex Mono', monospace";
+  x.fillStyle = C.ember;
+  x.fillText("SIMD-0553  ·  RESOURCE FEE BURN", PAD, PAD + 48);
+  ls("0px");
+
+  // headline
+  x.fillStyle = C.text;
+  x.font = "800 62px Archivo, sans-serif";
+  ls("-1.2px");
+  x.fillText("What SIMD-0553 does to", PAD, PAD + 132);
+  x.fillText("traffic already on Solana", PAD, PAD + 202);
+  ls("0px");
+
+  // gate columns
+  const gates = [["g1_10", "1/10 GATE"], ["g1_4", "1/4 GATE"], ["g1_2", "1/2 GATE"]];
+  // fill the content width exactly: 3 columns + 2 gaps == W - 2*PAD
+  const gap = 24, colW = (W - 2 * PAD - 2 * gap) / 3;
+  let cx = PAD;
+  const top = PAD + 254;
+  for (const [k, label] of gates) {
+    const g = D.gates[k];
+    x.fillStyle = C.surface;
+    x.beginPath(); x.roundRect(cx, top, colW, 158, 10); x.fill();
+    x.strokeStyle = C.line; x.lineWidth = 1;
+    x.beginPath(); x.roundRect(cx + .5, top + .5, colW - 1, 157, 10); x.stroke();
+    // ember stripe
+    x.fillStyle = C.ember;
+    x.beginPath(); x.roundRect(cx, top, 4, 158, [10, 0, 0, 10]); x.fill();
+
+    ls("1.8px");
+    x.font = "600 19px 'IBM Plex Mono', monospace";
+    x.fillStyle = C.mute;
+    x.fillText(label, cx + 26, top + 40);
+    ls("0px");
+
+    x.font = "700 52px Archivo, sans-serif";
+    x.fillStyle = C.ember;
+    x.fillText(n1(g.all.pctMore) + "%", cx + 24, top + 96);
+
+    x.font = "400 19px 'IBM Plex Mono', monospace";
+    x.fillStyle = C.dim;
+    x.fillText("pay more", cx + 26, top + 128);
+
+    // median, right aligned -- labelled, or the bare number reads as unexplained
+    const med = (g.all.p.p50 > 0 ? "+" : "") + n1(g.all.p.p50) + "%";
+    x.textAlign = "right";
+    x.font = "500 19px 'IBM Plex Mono', monospace";
+    x.fillStyle = g.all.p.p50 > 0 ? C.ember : C.teal;
+    x.fillText(med, cx + colW - 24, top + 128);
+    const medW = x.measureText(med).width;
+    x.font = "400 19px 'IBM Plex Mono', monospace";
+    x.fillStyle = C.mute;
+    x.fillText("median ", cx + colW - 24 - medW, top + 128);
+    x.textAlign = "left";
+
+    cx += colW + gap;
+  }
+
+  // bottom rule
+  const by = H - PAD - 46;
+  x.strokeStyle = C.line; x.lineWidth = 1;
+  x.beginPath(); x.moveTo(PAD, by); x.lineTo(W - PAD, by); x.stroke();
+
+  // burn line (left) + provenance (right)
+  x.font = "500 20px 'IBM Plex Mono', monospace";
+  x.fillStyle = C.dim;
+  const burn = "Daily burn  " + n0(D.gates.g1_10.burn.todayPerDaySol) + "  →  " +
+               n0(D.gates.g1_2.burn.newPerDaySol) + " SOL";
+  x.fillText(burn, PAD, by + 34);
+
+  x.textAlign = "right";
+  x.font = "400 19px 'IBM Plex Mono', monospace";
+  x.fillStyle = C.mute;
+  x.fillText(n0(M.transactions) + " txs · epoch " + M.epoch, W - PAD, by + 34);
+  x.textAlign = "left";
+
+  window.__png = cv.toDataURL("image/png");
+  window.__ready = true;
+
+  // hand the bytes straight to the dev server -> docs/og.png
+  const blob = await new Promise((r) => cv.toBlob(r, "image/png"));
+  const save = await fetch("/_save/og.png", { method: "POST", body: blob });
+  window.__saved = await save.json();
+  document.title = "OG saved " + window.__saved.bytes + "b";
+}
+
+document.fonts.ready.then(draw).catch((e) => { window.__error = String(e); });
+</script>
+</body>
+</html>

@@ -1,8 +1,13 @@
 # SIMD-0553 Repricing Monitor
 
+**Live dashboard → https://millw14.github.io/simd553-repricing/**
+
 Re-prices real mainnet traffic under [SIMD-0553](https://github.com/solana-foundation/solana-improvement-documents/blob/main/proposals/0553-resource-fee-burn.md)
 (Base Inclusion and Resource Fee) and reports what share of existing transactions
 would pay more, less, or the same at each feature gate.
+
+Current run: **6,065,467 transactions** sampled across all of **epoch 1018**.
+Every number on the dashboard is recomputed from block data — no estimates.
 
 ```
 total_fee = 2500                                      (base inclusion, 100% to leader)

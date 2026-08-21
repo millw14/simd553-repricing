@@ -69,6 +69,22 @@ modelled as a separate scenario in the dashboard.
 In the sample, **0% of vote transactions set any compute budget**, so Cavey's
 "Vote (with ComputeBudget)" example describes a future state, not current traffic.
 
+## Per-program drilldown
+
+The dashboard carries a searchable record for the top 150 programs by transaction
+count. Selecting one shows two bars on the same scale — what its average transaction
+is **charged for** versus what it **actually uses** — broken into signature, write
+locks, instruction data, requested CU, and loaded-accounts size.
+
+The gap is the actionable part. pump.fun, for example, requests 102,130 CU and
+consumes 16,834 (83.5% unused), and takes the loaded-accounts default on 20% of its
+transactions. At the 1/10 gate that is a median **+103%**; requesting accurately would
+make it **−33%**.
+
+Consumed CU comes from `meta.computeUnitsConsumed`; the actual loaded-accounts cost is
+recovered from the `meta.costUnits` residual, so both sides of the comparison are
+measured, not assumed.
+
 ## Run it
 
 ```bash

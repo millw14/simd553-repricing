@@ -38,9 +38,11 @@ const BUCKETS = [
 ];
 const bucketOf = (chg) => BUCKETS.find((b) => chg > b.lo && chg <= b.hi)?.k ?? ">+2000%";
 
-function newAcc() {
+// `cap` bounds the retained per-tx change samples. Program-level accumulators use a
+// smaller cap -- enough for a stable median without holding millions of doubles.
+function newAcc(cap = 400_000) {
   return {
-    n: 0, more: 0, less: 0, same: 0,
+    cap, n: 0, more: 0, less: 0, same: 0,
     todayFee: 0, newFee: 0, todayBurn: 0, newBurn: 0,
     leaderToday: 0, leaderNew: 0,
     changes: [], buckets: Object.fromEntries(BUCKETS.map((b) => [b.k, 0])),
@@ -56,7 +58,7 @@ function record(acc, todayFee, nf, todayBurn, newBurn, leaderToday, leaderNew) {
   if (d > 0) acc.more++; else if (d < 0) acc.less++; else acc.same++;
   const chg = todayFee > 0 ? (d / todayFee) * 100 : d > 0 ? Infinity : 0;
   acc.buckets[bucketOf(chg)]++;
-  if (acc.changes.length < 400_000) acc.changes.push(Number.isFinite(chg) ? chg : 100000);
+  if (acc.changes.length < acc.cap) acc.changes.push(Number.isFinite(chg) ? chg : 100000);
 }
 
 function finish(acc) {
@@ -81,9 +83,26 @@ const gates = {};
 for (const g of GATES) {
   gates[g.key] = {
     all: newAcc(), vote: newAcc(), nonVote: newAcc(), optimized: newAcc(), voteMigrated: newAcc(),
-    byProgram: new Map(), byPattern: { neither: newAcc(), cuOnly: newAcc(), loadedOnly: newAcc(), both: newAcc() },
+    byPattern: { neither: newAcc(), cuOnly: newAcc(), loadedOnly: newAcc(), both: newAcc() },
     byCostBucket: new Map(),
   };
+}
+
+// ---- per-program drilldown ----
+// One record per program, carrying the cost composition that explains WHY it
+// reprices the way it does, plus per-gate outcomes and its own optimized scenario.
+const PROG_CAP = 60_000;
+const progs = new Map();
+function progOf(id) {
+  if (!progs.has(id)) {
+    progs.set(id, {
+      id, n: 0, vote: 0, err: 0, setsCu: 0, setsLoaded: 0,
+      sum: { g: 0, w: 0, d: 0, c: 0, l: 0, cu: 0, cons: 0, al: 0, fee: 0, prio: 0 },
+      consN: 0, alN: 0,
+      gates: Object.fromEntries(GATES.map((g) => [g.key, { acc: newAcc(PROG_CAP), opt: newAcc(PROG_CAP) }])),
+    });
+  }
+  return progs.get(id);
 }
 
 const COST_BUCKETS = [
@@ -121,6 +140,17 @@ for await (const line of rl) {
   const canOpt = t.cons != null && t.al != null;
   if (canOpt) optEligible++;
 
+  const P = progOf(t.pr);
+  P.n++;
+  if (t.v) P.vote++;
+  if (t.e) P.err++;
+  if (t.sc) P.setsCu++;
+  if (t.sl2) P.setsLoaded++;
+  P.sum.g += t.g; P.sum.w += t.w; P.sum.d += t.d; P.sum.c += t.c;
+  P.sum.l += t.l; P.sum.cu += t.cu; P.sum.fee += t.f; P.sum.prio += t.p;
+  if (t.cons != null) { P.sum.cons += t.cons; P.consN++; }
+  if (t.al != null) { P.sum.al += t.al; P.alN++; }
+
   for (const g of GATES) {
     const G = gates[g.key];
     const res = resourceFee(t.cu, g);
@@ -134,8 +164,7 @@ for await (const line of rl) {
     if (!G.byCostBucket.has(cb)) G.byCostBucket.set(cb, newAcc());
     record(G.byCostBucket.get(cb), t.f, nf, todayBurn, res, leaderToday, leaderNew);
 
-    if (!G.byProgram.has(t.pr)) G.byProgram.set(t.pr, newAcc());
-    record(G.byProgram.get(t.pr), t.f, nf, todayBurn, res, leaderToday, leaderNew);
+    record(P.gates[g.key].acc, t.f, nf, todayBurn, res, leaderToday, leaderNew);
 
     if (t.cuvm != null) {
       const vmRes = resourceFee(t.cuvm, g);
@@ -149,6 +178,8 @@ for await (const line of rl) {
       const optCu = t.g + t.w + t.d + Math.ceil(Math.max(t.cons, 1) * CU_HEADROOM) + t.al;
       const optRes = resourceFee(optCu, g);
       record(G.optimized, t.f, BASE_INCLUSION_FEE + t.p + optRes, todayBurn, optRes,
+             leaderToday, BASE_INCLUSION_FEE + t.p);
+      record(P.gates[g.key].opt, t.f, BASE_INCLUSION_FEE + t.p + optRes, todayBurn, optRes,
              leaderToday, BASE_INCLUSION_FEE + t.p);
     }
   }
@@ -189,7 +220,7 @@ const out = {
     ],
   },
   gates: {},
-  programs: {},
+  programs: [],
 };
 
 for (const g of GATES) {
@@ -219,17 +250,66 @@ for (const g of GATES) {
     },
   };
 
-  out.programs[g.key] = [...G.byProgram.entries()]
-    .map(([id, acc]) => ({ id, label: PROGRAM_LABELS[id] || null, ...finish(acc) }))
-    .sort((a, b) => b.n - a.n)
-    .slice(0, 40)
-    .map((p) => ({
-      id: p.id, label: p.label, n: p.n, share: pct(p.n, nTx),
-      pctMore: p.pctMore, pctLess: p.pctLess,
-      avgTodayFee: p.avgTodayFee, avgNewFee: p.avgNewFee,
-      medianChangePct: p.p.p50,
-    }));
 }
+
+// ---- program drilldown records ----
+const TOP_PROGRAMS = 150;
+const r2 = (x) => Math.round(x * 100) / 100;
+
+out.programs = [...progs.values()]
+  .sort((a, b) => b.n - a.n)
+  .slice(0, TOP_PROGRAMS)
+  .map((P) => {
+    const avg = (k) => P.sum[k] / P.n;
+    const avgCons = P.consN ? P.sum.cons / P.consN : null;
+    const avgActualLoaded = P.alN ? P.sum.al / P.alN : null;
+    const rec = {
+      id: P.id,
+      label: PROGRAM_LABELS[P.id] || null,
+      n: P.n,
+      share: r2(pct(P.n, nTx)),
+      isVote: P.vote > P.n / 2,
+      failedPct: r2(pct(P.err, P.n)),
+      setsCuPct: r2(pct(P.setsCu, P.n)),
+      setsLoadedPct: r2(pct(P.setsLoaded, P.n)),
+      // cost composition -- this is the "why"
+      cost: {
+        sig: Math.round(avg("g")),
+        writeLock: Math.round(avg("w")),
+        data: Math.round(avg("d")),
+        cu: Math.round(avg("c")),
+        loaded: Math.round(avg("l")),
+        total: Math.round(avg("cu")),
+      },
+      consumedCu: avgCons == null ? null : Math.round(avgCons),
+      actualLoaded: avgActualLoaded == null ? null : Math.round(avgActualLoaded),
+      // how much of what it pays for it never uses
+      cuWastePct: avgCons == null || avg("c") === 0 ? null : r2(pct(avg("c") - avgCons, avg("c"))),
+      loadedWastePct:
+        avgActualLoaded == null || avg("l") === 0 ? null : r2(pct(avg("l") - avgActualLoaded, avg("l"))),
+      avgPriority: Math.round(avg("prio")),
+      gates: {},
+    };
+    for (const g of GATES) {
+      const a = finish(P.gates[g.key].acc);
+      const o = finish(P.gates[g.key].opt);
+      rec.gates[g.key] = {
+        pctMore: r2(a.pctMore),
+        pctLess: r2(a.pctLess),
+        medianChangePct: r2(a.p.p50),
+        p25: r2(a.p.p25),
+        p75: r2(a.p.p75),
+        avgTodayFee: Math.round(a.avgTodayFee),
+        avgNewFee: Math.round(a.avgNewFee),
+        burnPerDaySol: r2((a.totalNewBurn * scale) / LAMPORTS_PER_SOL),
+        buckets: a.buckets,
+        optimized: o.n
+          ? { medianChangePct: r2(o.p.p50), avgNewFee: Math.round(o.avgNewFee), pctMore: r2(o.pctMore) }
+          : null,
+      };
+    }
+    return rec;
+  });
 
 fs.mkdirSync(OUT.split(/[\\/]/).slice(0, -1).join("/") || ".", { recursive: true });
 fs.writeFileSync(OUT, JSON.stringify(out, null, 1));

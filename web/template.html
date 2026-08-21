@@ -17,6 +17,8 @@
   --ember-soft: #F7E3D7;
   --teal: #0E7C6B;
   --teal-soft: #D8EDE9;
+  /* cost-composition ramp: kept separate from the more/less semantics */
+  --c1: #8496A8; --c2: #5B7A99; --c3: #A9BCCD; --c4: #C4531C; --c5: #A87A2E;
   --shadow: 0 1px 2px rgba(20,32,44,.06), 0 8px 24px -12px rgba(20,32,44,.14);
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
@@ -36,6 +38,7 @@
     --ember-soft: #3A2318;
     --teal: #3ECBB0;
     --teal-soft: #12332E;
+    --c1: #6C7F93; --c2: #7BA3C9; --c3: #47607A; --c4: #F0854A; --c5: #D7A44F;
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
   }
 }
@@ -52,6 +55,7 @@
   --ember-soft: #3A2318;
   --teal: #3ECBB0;
   --teal-soft: #12332E;
+  --c1: #6C7F93; --c2: #7BA3C9; --c3: #47607A; --c4: #F0854A; --c5: #D7A44F;
   --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
 }
 
@@ -200,6 +204,65 @@ tr:last-child td { border-bottom: 0; }
 .chip.pos { background: var(--ember-soft); color: var(--ember); }
 .chip.neg { background: var(--teal-soft); color: var(--teal); }
 
+/* ---------- program drilldown ---------- */
+.search {
+  width: 100%; max-width: 420px; padding: 9px 13px; margin-bottom: 16px;
+  font-family: var(--mono); font-size: 13px;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--line); border-radius: 7px;
+}
+.search::placeholder { color: var(--text-mute); }
+.search:focus { outline: 2px solid var(--ember); outline-offset: -1px; border-color: transparent; }
+
+.detail { margin-bottom: 18px; }
+.detail-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px;
+  padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--line);
+}
+.detail-head h3 { font-family: var(--display); font-size: 21px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+.detail-head .addr { font-family: var(--mono); font-size: 11.5px; color: var(--text-mute); word-break: break-all; }
+
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 14px; margin-bottom: 22px; }
+.kv-item { display: flex; flex-direction: column; gap: 4px; }
+.kv-item .k {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-mute);
+}
+.kv-item .v {
+  font-family: var(--mono); font-size: 16px; font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.comp-title {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-mute); margin: 0 0 10px;
+}
+.comp-row { display: grid; grid-template-columns: 92px 1fr 84px; align-items: center; gap: 12px; margin-bottom: 8px; }
+.comp-label { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); text-align: right; }
+.comp-bar { display: flex; height: 26px; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+.comp-seg { height: 100%; transition: width .3s cubic-bezier(.4,0,.2,1); }
+.comp-total {
+  font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-dim);
+}
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; }
+.legend span { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+.legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+.waste {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 20px;
+}
+.waste-card { background: var(--surface-2); border-radius: 8px; padding: 13px 15px; }
+.waste-card .wk { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-mute); margin-bottom: 7px; }
+.waste-card .wv { font-size: 13px; color: var(--text-dim); line-height: 1.45; }
+.waste-card .wv b { color: var(--text); font-family: var(--mono); font-weight: 500; }
+
+tr.pick { cursor: pointer; }
+tr.pick:hover td { background: var(--surface-2); }
+tr.pick[aria-selected="true"] td { background: var(--ember-soft); }
+tr.pick[aria-selected="true"] td:first-child { box-shadow: inset 3px 0 0 var(--ember); }
+tr.pick:focus-visible td { outline: 2px solid var(--ember); outline-offset: -2px; }
+.empty { color: var(--text-mute); font-family: var(--mono); font-size: 12.5px; padding: 18px 0; }
+
 /* ---------- scenario cards ---------- */
 .scen { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
 .scen-card {
@@ -290,8 +353,15 @@ a { color: var(--ember); text-decoration-thickness: 1px; text-underline-offset: 
   </section>
 
   <section>
-    <h2><span class="n">04</span> By program</h2>
-    <p class="sec-note">The 20 programs that account for the most transactions in the sample, by the last non-ComputeBudget instruction.</p>
+    <h2><span class="n">04</span> Program drilldown</h2>
+    <p class="sec-note">
+      Find your program to see how its own traffic reprices &mdash; and how much of what it would be
+      charged for it never actually uses. Attributed by the last non-ComputeBudget instruction;
+      top 150 programs by transaction count.
+    </p>
+    <input class="search" id="progSearch" type="search" autocomplete="off"
+           placeholder="Search name or program address…" aria-label="Search programs">
+    <div class="panel detail" id="progDetail"></div>
     <div class="panel tbl-scroll"><table id="progTbl"></table></div>
   </section>
 
@@ -426,17 +496,7 @@ a { color: var(--ember); text-decoration-thickness: 1px; text-underline-offset: 
         "</td><td>" + lam(b.avgNewFee) + "</td></tr>"
       ).join("") + "</tbody>";
 
-    // program table
-    document.getElementById("progTbl").innerHTML =
-      "<thead><tr><th>Program</th><th>Txs</th><th>Share</th><th>Pay more</th><th>Median change</th><th>Avg fee today</th><th>Avg fee new</th></tr></thead><tbody>" +
-      D.programs[gate].slice(0, 20).map((p) =>
-        "<tr><td>" + (p.label ? p.label : "<span class=pid>" + p.id.slice(0, 22) + "…</span>") +
-        (p.label ? '<span class="pid">' + p.id.slice(0, 22) + "…</span>" : "") + "</td>" +
-        "<td>" + n0(p.n) + "</td><td>" + n1(p.share) + "%</td>" +
-        "<td>" + n1(p.pctMore) + "%</td>" +
-        '<td><span class="chip ' + (p.medianChangePct > 0 ? "pos" : "neg") + '">' + pc(p.medianChangePct) + "</span></td>" +
-        "<td>" + lam(p.avgTodayFee) + "</td><td>" + lam(p.avgNewFee) + "</td></tr>"
-      ).join("") + "</tbody>";
+    renderPrograms();
 
     // scenarios
     const A = G.all, O = G.optimized, V = G.voteMigratedScenario;
@@ -455,6 +515,144 @@ a { color: var(--ember); text-decoration-thickness: 1px; text-underline-offset: 
       "</div>"
     ).join("");
   }
+
+  // ---------- program drilldown ----------
+  let query = "", selected = D.programs[0].id;
+  const nameOf = (p) => p.label || p.id.slice(0, 10) + "…" + p.id.slice(-4);
+
+  const SEGS = [
+    ["sig", "signature", "--c1"],
+    ["writeLock", "write locks", "--c2"],
+    ["data", "instr data", "--c3"],
+    ["cu", "requested CU", "--c4"],
+    ["loaded", "loaded-accounts size", "--c5"],
+  ];
+
+  function bar(parts, scale) {
+    return '<div class="comp-bar">' + parts.map(([v, tok, lbl]) =>
+      v <= 0 ? "" :
+      '<div class="comp-seg" style="width:' + (v / scale) * 100 + "%;background:var(" + tok + ')"' +
+      ' title="' + lbl + ": " + n0(v) + ' units"></div>'
+    ).join("") + "</div>";
+  }
+
+  function renderDetail(p) {
+    const G = p.gates[gate];
+    const c = p.cost;
+    const charged = SEGS.map(([k, lbl, tok]) => [c[k], tok, lbl]);
+    const usedCu = p.consumedCu, usedLoaded = p.actualLoaded;
+    const haveUsed = usedCu != null && usedLoaded != null;
+    const used = [
+      [c.sig, "--c1", "signature"], [c.writeLock, "--c2", "write locks"], [c.data, "--c3", "instr data"],
+      [usedCu, "--c4", "consumed CU"], [usedLoaded, "--c5", "loaded-accounts size"],
+    ];
+    const usedTotal = haveUsed ? c.sig + c.writeLock + c.data + usedCu + usedLoaded : 0;
+
+    const kv = [
+      ["Transactions", n0(p.n)],
+      ["Share of sample", n1(p.share) + "%"],
+      ["Pay more", n1(G.pctMore) + "%"],
+      ["Median change", pc(G.medianChangePct)],
+      ["Avg fee today", lam(G.avgTodayFee)],
+      ["Avg fee at " + D.gates[gate].label, lam(G.avgNewFee)],
+      ["Sets CU limit", n1(p.setsCuPct) + "%"],
+      ["Sets loaded-size", n1(p.setsLoadedPct) + "%"],
+    ];
+
+    const cards = [];
+    if (p.cuWastePct != null) {
+      cards.push(["Compute units", "Requests <b>" + n0(c.cu) + "</b>, consumes <b>" + n0(usedCu) +
+        "</b> &mdash; <b>" + n1(p.cuWastePct) + "%</b> of the compute it pays for goes unused."]);
+    }
+    if (p.loadedWastePct != null) {
+      cards.push(["Loaded accounts data", "Charged for <b>" + n0(c.loaded) + "</b> units, actually loads <b>" +
+        n0(usedLoaded) + "</b> &mdash; <b>" + n1(p.loadedWastePct) + "%</b> wasted." +
+        (p.setsLoadedPct < 50 ? " Most of its transactions take the 64 MiB default." : "")]);
+    }
+    if (G.optimized) {
+      cards.push(["If it requested accurately", "Median change would be <b>" + pc(G.optimized.medianChangePct) +
+        "</b> instead of <b>" + pc(G.medianChangePct) + "</b>, and only <b>" + n1(G.optimized.pctMore) +
+        "%</b> of its transactions would pay more."]);
+    }
+
+    return (
+      '<div class="detail-head"><h3>' + nameOf(p) + "</h3>" +
+      '<span class="addr">' + p.id + "</span></div>" +
+      '<div class="kv">' + kv.map((r) =>
+        '<div class="kv-item"><span class="k">' + r[0] + '</span><span class="v">' + r[1] + "</span></div>"
+      ).join("") + "</div>" +
+      '<p class="comp-title">Average requested cost units per transaction</p>' +
+      '<div class="comp-row"><div class="comp-label">charged for</div>' + bar(charged, c.total) +
+      '<div class="comp-total">' + n0(c.total) + "</div></div>" +
+      (haveUsed
+        ? '<div class="comp-row"><div class="comp-label">actually used</div>' + bar(used, c.total) +
+          '<div class="comp-total">' + n0(usedTotal) + "</div></div>"
+        : "") +
+      '<div class="legend">' + SEGS.map(([, lbl, tok]) =>
+        "<span><i style=\"background:var(" + tok + ')"></i>' + lbl + "</span>"
+      ).join("") + "</div>" +
+      (cards.length
+        ? '<div class="waste">' + cards.map((c2) =>
+            '<div class="waste-card"><div class="wk">' + c2[0] + '</div><div class="wv">' + c2[1] + "</div></div>"
+          ).join("") + "</div>"
+        : "")
+    );
+  }
+
+  function renderPrograms() {
+    const q = query.trim().toLowerCase();
+    const list = D.programs.filter((p) =>
+      !q || (p.label && p.label.toLowerCase().includes(q)) || p.id.toLowerCase().includes(q)
+    );
+
+    const detailEl = document.getElementById("progDetail");
+    const pick = list.find((p) => p.id === selected) || list[0];
+    if (pick) {
+      detailEl.style.display = "";
+      detailEl.innerHTML = renderDetail(pick);
+    } else {
+      detailEl.style.display = "none";
+    }
+
+    const tbl = document.getElementById("progTbl");
+    if (!list.length) {
+      tbl.innerHTML = '<tbody><tr><td class="empty">No program matches “' +
+        query.replace(/[<>&]/g, "") + '”.</td></tr></tbody>';
+      return;
+    }
+    tbl.innerHTML =
+      (list.length > 25 ? '<caption style="caption-side:bottom;text-align:left;padding-top:12px;' +
+        'font-family:var(--mono);font-size:11.5px;color:var(--text-mute)">Showing 25 of ' +
+        n0(list.length) + " matching programs — refine the search to narrow.</caption>" : "") +
+      "<thead><tr><th>Program</th><th>Txs</th><th>Share</th><th>Pay more</th><th>Median change</th>" +
+      "<th>CU unused</th><th>Avg fee today</th><th>Avg fee new</th></tr></thead><tbody>" +
+      list.slice(0, 25).map((p) => {
+        const G = p.gates[gate];
+        return '<tr class="pick" tabindex="0" data-id="' + p.id +
+          '" aria-selected="' + (pick && p.id === pick.id) + '">' +
+          "<td>" + (p.label ? p.label + '<span class="pid">' + p.id.slice(0, 24) + "…</span>"
+                            : '<span class="pid">' + p.id.slice(0, 24) + "…</span>") + "</td>" +
+          "<td>" + n0(p.n) + "</td><td>" + n1(p.share) + "%</td><td>" + n1(G.pctMore) + "%</td>" +
+          '<td><span class="chip ' + (G.medianChangePct > 0 ? "pos" : "neg") + '">' +
+          pc(G.medianChangePct) + "</span></td>" +
+          "<td>" + (p.cuWastePct == null ? "—" : n1(p.cuWastePct) + "%") + "</td>" +
+          "<td>" + lam(G.avgTodayFee) + "</td><td>" + lam(G.avgNewFee) + "</td></tr>";
+      }).join("") +
+      "</tbody>";
+
+    tbl.querySelectorAll("tr.pick").forEach((tr) => {
+      const go = () => { selected = tr.dataset.id; renderPrograms(); };
+      tr.addEventListener("click", go);
+      tr.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); }
+      });
+    });
+  }
+
+  document.getElementById("progSearch").addEventListener("input", (e) => {
+    query = e.target.value;
+    renderPrograms();
+  });
 
   document.getElementById("assumptions").innerHTML =
     M.assumptions.map((a) => "<li>" + a + "</li>").join("");
